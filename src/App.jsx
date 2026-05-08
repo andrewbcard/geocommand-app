@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
 
 const teams = [
@@ -62,7 +62,154 @@ useEffect(() => {
   return () => clearInterval(interval);
 }, []);
   const [activeTab, setActiveTab] = useState("leaders")
+const playerStats = useMemo(() => {
+  const map = {};
 
+  rawData.forEach((row) => {
+    const player = row["CTP Player"];
+    const team = row["CTP Team"];
+    const region = row["Region"];
+    const distance = parseFloat(row["CTP Distance (km)"]) || 0;
+    const ko = row["Knockout Punch"];
+
+    if (!player) return;
+
+    if (!map[player]) {
+      map[player] = {
+        name: player,
+        team,
+        ctps: 0,
+        totalDistance: 0,
+        kos: 0,
+        regions: {},
+      };
+    }
+
+    map[player].ctps += 1;
+    map[player].totalDistance += distance;
+
+    if (region) {
+      if (!map[player].regions[region]) {
+        map[player].regions[region] = {
+          count: 0,
+          totalDistance: 0,
+        };
+      }
+
+      map[player].regions[region].count += 1;
+      map[player].regions[region].totalDistance += distance;
+    }
+
+    if (ko && ko !== "-") {
+      map[player].kos += 1;
+    }
+  });
+
+  return Object.values(map)
+    .map((p) => {
+      const bestRegion =
+        Object.entries(p.regions)
+          .map(([name, data]) => ({
+            name,
+            avgDistance: data.totalDistance / data.count,
+          }))
+          .sort((a, b) => a.avgDistance - b.avgDistance)[0]?.name || "N/A";
+
+      return {
+        ...p,
+        avgDistance: p.totalDistance / p.ctps,
+        bestRegion,
+      };
+    })
+    .sort((a, b) => b.ctps - a.ctps || a.avgDistance - b.avgDistance);
+}, [rawData]);
+
+const teamStats = useMemo(() => {
+  const map = {};
+
+  rawData.forEach((row) => {
+    const team = row["CTP Team"];
+    const distance = parseFloat(row["CTP Distance (km)"]) || 0;
+    const ko = row["Knockout Punch"];
+
+    if (!team) return;
+
+    if (!map[team]) {
+      map[team] = {
+        name: team,
+        ctps: 0,
+        totalDistance: 0,
+        kos: 0,
+      };
+    }
+
+    map[team].ctps += 1;
+    map[team].totalDistance += distance;
+
+    if (ko && ko !== "-") {
+      map[team].kos += 1;
+    }
+  });
+
+  return Object.values(map)
+    .map((team) => ({
+      ...team,
+      avgDistance: team.totalDistance / team.ctps,
+    }))
+    .sort((a, b) => b.ctps - a.ctps);
+}, [rawData]);
+
+const regionStats = useMemo(() => {
+  const map = {};
+
+  rawData.forEach((row) => {
+    const region = row["Region"];
+    const player = row["CTP Player"];
+    const distance = parseFloat(row["CTP Distance (km)"]) || 0;
+
+    if (!region || !player) return;
+
+    if (!map[region]) {
+      map[region] = {
+        name: region,
+        appearances: 0,
+        totalDistance: 0,
+        players: {},
+      };
+    }
+
+    map[region].appearances += 1;
+    map[region].totalDistance += distance;
+
+    if (!map[region].players[player]) {
+      map[region].players[player] = {
+        count: 0,
+        totalDistance: 0,
+      };
+    }
+
+    map[region].players[player].count += 1;
+    map[region].players[player].totalDistance += distance;
+  });
+
+  return Object.values(map)
+    .map((region) => {
+      const bestPlayer =
+        Object.entries(region.players)
+          .map(([name, data]) => ({
+            name,
+            avgDistance: data.totalDistance / data.count,
+          }))
+          .sort((a, b) => a.avgDistance - b.avgDistance)[0];
+
+      return {
+        ...region,
+        avgDistance: region.totalDistance / region.appearances,
+        bestPlayer: bestPlayer?.name || "N/A",
+      };
+    })
+    .sort((a, b) => a.avgDistance - b.avgDistance);
+}, [rawData]);
   return (
     <div className="min-h-screen bg-[#070b14] text-white overflow-hidden">
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_top_right,#1d4ed830,transparent_35%),radial-gradient(circle_at_bottom_left,#06b6d430,transparent_35%)] pointer-events-none" />
@@ -76,24 +223,29 @@ useEffect(() => {
 
   <p className="text-cyan-400">
     Daily Entries: {dailyData.length}
+    <p className="text-pink-400">
+  Players Loaded: {playerStats.length}
+</p>
   </p>
 </div>
         {activeTab === "feed" && <FeedTab />}
-        {activeTab === "leaders" && <LeadersTab />}
-        {activeTab === "regions" && <RegionsTab />}
-        {activeTab === "players" && <PlayersTab />}
+        {activeTab === "leaders" && <LeadersTab playerStats={playerStats} teamStats={teamStats} />}
+        {activeTab === "regions" && <RegionsTab regionStats={regionStats} />}
+        {activeTab === "players" && <PlayersTab playerStats={playerStats} />}
+        {activeTab === "daily" && <DailyChallengeTab dailyData={dailyData} />}
       </div>
     </div>
   )
 }
 
 function TopNav({ activeTab, setActiveTab }) {
-  const tabs = [
-    { id: "feed", label: "Feed" },
-    { id: "leaders", label: "Leaders" },
-    { id: "regions", label: "Regions" },
-    { id: "players", label: "Players" },
-  ]
+    const tabs = [
+      { id: "feed", label: "Feed" },
+      { id: "leaders", label: "Leaders" },
+      { id: "regions", label: "Regions" },
+      { id: "players", label: "Players" },
+      { id: "daily", label: "Daily Challenge" },
+    ]
 
   return (
     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 mb-10">
@@ -184,7 +336,7 @@ function StatCard({ label, value, sub, accent = "cyan" }) {
   )
 }
 
-function LeadersTab() {
+function LeadersTab({ playerStats, teamStats }) {
   return (
     <>
       <PageHeader
@@ -194,20 +346,37 @@ function LeadersTab() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <StatCard label="League Leader" value="Atlas" sub="12 Wins • +4,122 diff" accent="cyan" />
-        <StatCard label="Highest Avg Score" value="24,320" sub="Season Average" accent="purple" />
-        <StatCard label="Current MVP" value="Andrew" sub="+18% This Week" accent="pink" />
+        <StatCard
+          label="Top Team"
+          value={teamStats[0]?.name || "Loading"}
+          sub={`${teamStats[0]?.ctps || 0} CTPs`}
+          accent="cyan"
+        />
+
+        <StatCard
+          label="Best Avg Distance"
+          value={`${playerStats[0]?.avgDistance.toFixed(1) || "0.0"} km`}
+          sub={playerStats[0]?.name || "Loading"}
+          accent="purple"
+        />
+
+        <StatCard
+          label="CTP Leader"
+          value={playerStats[0]?.name || "Loading"}
+          sub={`${playerStats[0]?.ctps || 0} CTPs`}
+          accent="pink"
+        />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Panel className="xl:col-span-2">
           <PanelHeader eyebrow="Rankings" title="League Standings" right="Updated Live" />
-          <StandingsTable />
+          <StandingsTable teamStats={teamStats} />
         </Panel>
 
         <Panel>
           <PanelHeader eyebrow="MVP Race" title="Top Players" right="Season" />
-          <PlayerList />
+          <PlayerList playerStats={playerStats} />
         </Panel>
       </div>
 
@@ -272,7 +441,7 @@ function FeedTab() {
   )
 }
 
-function RegionsTab() {
+function RegionsTab({ regionStats }) {
   return (
     <>
       <PageHeader
@@ -286,17 +455,17 @@ function RegionsTab() {
           <PanelHeader eyebrow="Regional Meta" title="Strongest Regions" right="Accuracy Index" />
 
           <div className="space-y-6">
-            {regions.map((region) => (
+            {regionStats.map((region) => (
               <div key={region.name}>
                 <div className="flex justify-between mb-2">
                   <span className="font-bold">{region.name}</span>
-                  <span className="text-cyan-400 font-black">{region.rate}%</span>
+                  <span className="text-cyan-400 font-black">{region.avgDistance.toFixed(1)} km avg</span>
                 </div>
 
                 <div className="h-3 rounded-full bg-white/10 overflow-hidden">
                   <div
-                    className={`h-full ${region.color} rounded-full`}
-                    style={{ width: `${region.rate}%` }}
+                    className="h-full bg-cyan-400 rounded-full"
+                    style={{ width: `${Math.max(8, 100 - Math.min(region.avgDistance, 500) / 5)}%` }}
                   />
                 </div>
               </div>
@@ -308,9 +477,26 @@ function RegionsTab() {
           <PanelHeader eyebrow="Map Pool" title="Territory Notes" right="Scout" />
 
           <div className="space-y-4">
-            <MiniStat label="Best Region" value="Western Europe" accent="text-cyan-400" />
-            <MiniStat label="Risk Zone" value="South America" accent="text-pink-400" />
-            <MiniStat label="Most Played" value="Japan" accent="text-purple-400" />
+            <MiniStat
+              label="Best Region"
+              value={regionStats[0]?.name || "N/A"}
+              accent="text-cyan-400"
+            />
+
+            <MiniStat
+              label="Hardest Region"
+              value={regionStats[regionStats.length - 1]?.name || "N/A"}
+              accent="text-pink-400"
+            />
+
+            <MiniStat
+              label="Most Played"
+              value={
+                [...regionStats]
+                  .sort((a, b) => b.appearances - a.appearances)[0]?.name || "N/A"
+              }
+              accent="text-purple-400"
+            />
           </div>
         </Panel>
       </div>
@@ -318,7 +504,7 @@ function RegionsTab() {
   )
 }
 
-function PlayersTab() {
+function PlayersTab({ playerStats }) {
   return (
     <>
       <PageHeader
@@ -328,7 +514,7 @@ function PlayersTab() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        {players.map((player) => (
+        {playerStats.map((player) => (
           <div key={player.name} className="relative overflow-hidden bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 shadow-2xl hover:bg-white/10 transition-all">
             <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 blur-3xl" />
 
@@ -341,9 +527,10 @@ function PlayersTab() {
             </h3>
 
             <div className="space-y-4">
-              <MiniStat label="Accuracy" value={player.accuracy} accent="text-cyan-400" />
-              <MiniStat label="Avg Placement" value={player.avgPlacement} />
-              <MiniStat label="Best Region" value={player.region} accent="text-purple-400" />
+              <MiniStat label="CTPs" value={player.ctps} accent="text-cyan-400" />
+              <MiniStat label="Avg Distance" value={`${player.avgDistance.toFixed(1)} km`} />
+              <MiniStat label="Best Region" value={player.bestRegion} accent="text-purple-400" />
+              <MiniStat label="KOs" value={player.kos} accent="text-pink-400" />
             </div>
           </div>
         ))}
@@ -380,7 +567,7 @@ function PanelHeader({ eyebrow, title, right }) {
   )
 }
 
-function StandingsTable() {
+function StandingsTable({ teamStats = [] }) {
   return (
     <>
       <div className="grid grid-cols-4 text-slate-500 text-sm border-b border-white/10 pb-3 px-4">
@@ -391,7 +578,7 @@ function StandingsTable() {
       </div>
 
       <div className="space-y-3 mt-4">
-        {teams.map((team) => (
+        {teamStats.map((team) => (
           <div key={team.name} className="grid grid-cols-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border border-cyan-500/10">
             <div className="font-bold text-lg">{team.name}</div>
             <div className="font-semibold">{team.wins}</div>
@@ -404,10 +591,10 @@ function StandingsTable() {
   )
 }
 
-function PlayerList() {
+function PlayerList({ playerStats = [] }) {
   return (
     <div className="space-y-3">
-      {players.slice(0, 3).map((player) => (
+      {playerStats.slice(0, 5).map((player) => (
         <div key={player.name} className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/10">
           <div>
             <p className="font-bold">{player.name}</p>
@@ -415,8 +602,8 @@ function PlayerList() {
           </div>
 
           <div className="text-right">
-            <p className="text-cyan-400 font-bold">{player.accuracy}</p>
-            <p className="text-slate-500 text-xs">Accuracy</p>
+            <p className="text-cyan-400 font-bold">{player.ctps}</p>
+            <p className="text-slate-500 text-xs">CTPs</p>
           </div>
         </div>
       ))}
@@ -490,5 +677,82 @@ function BottomAnalytics() {
         </div>
       </Panel>
     </div>
+  )
+}
+function DailyChallengeTab({ dailyData = [] }) {
+  return (
+    <>
+      <PageHeader
+        eyebrow="Daily Challenge"
+        title="Daily Challenge"
+        description="Live stats from the Daily Challenges sheet: country hits, region hits, distance, timing, date, and mode."
+      />
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <StatCard
+          label="Total Guesses"
+          value={dailyData.length}
+          sub="All daily entries"
+          accent="cyan"
+        />
+
+        <StatCard
+          label="Country Hits"
+          value={dailyData.filter((row) => row["Country Hit"] === "Yes").length}
+          sub="Exact country guesses"
+          accent="purple"
+        />
+
+        <StatCard
+          label="Region Hits"
+          value={dailyData.filter((row) => row["Region Hit"] === "Yes").length}
+          sub="Correct region guesses"
+          accent="pink"
+        />
+      </div>
+
+      <Panel>
+        <PanelHeader eyebrow="Daily Feed" title="Recent Daily Results" right="Live" />
+
+        <div className="space-y-3">
+          {dailyData.slice(0, 12).map((row, index) => (
+            <div
+              key={index}
+              className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center bg-white/5 rounded-2xl p-4 border border-white/10"
+            >
+              <div>
+                <p className="text-slate-500 text-xs">Player</p>
+                <p className="font-bold">{row.Player}</p>
+              </div>
+
+              <div>
+                <p className="text-slate-500 text-xs">Country</p>
+                <p className="font-bold">{row.Country}</p>
+              </div>
+
+              <div>
+                <p className="text-slate-500 text-xs">Region</p>
+                <p className="font-bold">{row.Region}</p>
+              </div>
+
+              <div>
+                <p className="text-slate-500 text-xs">Distance</p>
+                <p className="font-bold text-cyan-400">{row["Distance (km)"]} km</p>
+              </div>
+
+              <div>
+                <p className="text-slate-500 text-xs">Time</p>
+                <p className="font-bold">{row["Time/Guess"]}</p>
+              </div>
+
+              <div>
+                <p className="text-slate-500 text-xs">Mode</p>
+                <p className="font-bold">{row.Mode}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Panel>
+    </>
   )
 }
