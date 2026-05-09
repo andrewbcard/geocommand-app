@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import { MiniStat, PageHeader, Panel, PanelHeader, StatCard } from "./dashboardPrimitives.jsx"
+import { PlayerAvatar } from "./LeagueIdentity.jsx"
 import {
   buildDailyPlayerStats,
   buildDailyRegionStats,
@@ -180,10 +181,17 @@ function DailyComparison({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {[playerA, playerB].map((player) => (
           <div key={player?.name || "empty"} className="bg-white/5 rounded-2xl p-5 border border-white/10">
-            <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
-              Profile Snapshot
-            </p>
-            <h4 className="text-2xl font-black mb-4">{player?.name || "Choose a player"}</h4>
+            <div className="flex items-center gap-4 mb-4">
+              <PlayerAvatar playerName={player?.name} className="h-16 w-16" />
+
+              <div>
+                <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
+                  Profile Snapshot
+                </p>
+                <h4 className="text-2xl font-black">{player?.name || "Choose a player"}</h4>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <MiniStat label="Strongest" value={player?.strongestRegion || "N/A"} accent="text-emerald-400" />
               <MiniStat label="Weakest" value={player?.weakestRegion || "N/A"} accent="text-amber-400" />
@@ -219,9 +227,13 @@ function DailyPlayerTable({ playerStats = [] }) {
       <div className="space-y-3 mt-4">
         {playerStats.map((player, index) => (
           <div key={player.name} className="grid grid-cols-1 md:grid-cols-5 gap-3 md:gap-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border border-white/10">
-            <div>
-              <p className="font-black">#{index + 1} {player.name}</p>
-              <p className="text-slate-500 text-xs md:hidden">{player.guesses} guesses</p>
+            <div className="flex items-center gap-3">
+              <PlayerAvatar playerName={player.name} className="h-12 w-12" />
+
+              <div>
+                <p className="font-black">#{index + 1} {player.name}</p>
+                <p className="text-slate-500 text-xs md:hidden">{player.guesses} guesses</p>
+              </div>
             </div>
             <div className="font-semibold">{player.guesses}</div>
             <div className="text-purple-300 font-bold">{formatPercent(player.countryHitRate)}</div>
@@ -237,10 +249,17 @@ function DailyPlayerTable({ playerStats = [] }) {
 function DailyPlayerCard({ player }) {
   return (
     <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 shadow-2xl hover:bg-white/10 transition-all">
-      <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
-        Daily Profile
-      </p>
-      <h3 className="text-3xl font-black mb-6">{player.name}</h3>
+      <div className="flex items-end gap-4 mb-6">
+        <PlayerAvatar playerName={player.name} className="h-24 w-24" />
+
+        <div>
+          <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
+            Daily Profile
+          </p>
+          <h3 className="text-3xl font-black">{player.name}</h3>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <MiniStat label="Guesses" value={player.guesses} />
         <MiniStat label="Avg Distance" value={formatDistance(player.avgDistance)} accent="text-cyan-400" />

@@ -12,6 +12,7 @@ import {
 import * as d3 from "d3"
 import { feature } from "topojson-client";
 import DailyChallengeTab from "./components/DailyChallengeTab.jsx"
+import { PlayerAvatar, TeamLogo } from "./components/LeagueIdentity.jsx"
 import { buildDailyPlayerStats, formatDistance, formatPercent, getDistanceTier } from "./data/stats.js"
 
 const WORLD_TOPO_JSON =
@@ -66,7 +67,6 @@ const TEAM_BRANDING = {
     glow: "shadow-cyan-500/20",
     border: "border-cyan-400/30",
     accent: "text-cyan-300",
-    logo: "◈",
   },
 
   Bontswana: {
@@ -74,7 +74,6 @@ const TEAM_BRANDING = {
     glow: "shadow-purple-500/20",
     border: "border-purple-400/30",
     accent: "text-purple-300",
-    logo: "▲",
   },
 }
 function getTeamBrand(teamName) {
@@ -966,11 +965,16 @@ function PlayersTab({ playerStats = [], dailyData = [] }) {
 >
             <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 blur-3xl" />
 
-            <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
-              <span className={brand.accent}>
-              {brand.logo} {player.team}
-            </span>
-            </p>
+            <div className="relative z-10 flex items-start justify-between gap-4 mb-5">
+              <PlayerAvatar playerName={player.name} className="h-24 w-24" />
+
+              <div className="flex items-center gap-2">
+                <TeamLogo teamName={player.team} className="h-9 w-9" />
+                <span className={`text-xs font-black uppercase tracking-[0.2em] ${brand.accent}`}>
+                  {player.team}
+                </span>
+              </div>
+            </div>
 
             <h3 className="text-3xl font-black mb-6">
               {player.name}
@@ -1029,16 +1033,23 @@ function PlayerProfileDetail({ player }) {
   return (
     <div className="space-y-6">
       <div className={`rounded-[2rem] border ${brand.border} bg-white/5 p-6`}>
-        <p className={`uppercase tracking-[0.2em] text-xs font-bold mb-2 ${brand.accent}`}>
-          {brand.logo} {player.team || "Free Agent"}
-        </p>
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-5">
+            <PlayerAvatar playerName={player.name} className="h-40 w-40" />
 
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
-          <div>
-            <h3 className="text-5xl font-black">{player.name}</h3>
-            <p className="text-slate-400 mt-3">
-              {player.consistency} season profile with {player.ctps} CTPs and {player.kos} KOs.
-            </p>
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <TeamLogo teamName={player.team} className="h-10 w-10" />
+                <p className={`uppercase tracking-[0.2em] text-xs font-bold ${brand.accent}`}>
+                  {player.team || "Free Agent"}
+                </p>
+              </div>
+
+              <h3 className="text-5xl font-black">{player.name}</h3>
+              <p className="text-slate-400 mt-3">
+                {player.consistency} season profile with {player.ctps} CTPs and {player.kos} KOs.
+              </p>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 min-w-64">
@@ -1234,8 +1245,9 @@ function StandingsTable({ teamStats = [] }) {
       className={`grid grid-cols-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border ${brand.border} ${brand.glow}`}
     >
       <div className="font-bold">
-        <span className={brand.accent}>
-          {brand.logo} {team.name}
+        <span className={`flex items-center gap-3 ${brand.accent}`}>
+          <TeamLogo teamName={team.name} className="h-8 w-8" />
+          {team.name}
         </span>
       </div>
 
@@ -1263,9 +1275,13 @@ function PlayerList({ playerStats = [] }) {
     <div className="space-y-3">
       {playerStats.slice(0, 5).map((player) => (
         <div key={player.name} className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/10">
-          <div>
-            <p className="font-bold">{player.name}</p>
-            <p className="text-slate-500 text-sm">{player.team}</p>
+          <div className="flex items-center gap-3">
+            <PlayerAvatar playerName={player.name} className="h-12 w-12" />
+
+            <div>
+              <p className="font-bold">{player.name}</p>
+              <p className="text-slate-500 text-sm">{player.team}</p>
+            </div>
           </div>
 
           <div className="text-right">
@@ -1286,9 +1302,13 @@ function AverageDistanceList({ playerStats = [] }) {
         .slice(0, 6)
         .map((player, index) => (
           <div key={player.name} className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/10">
-            <div>
-              <p className="font-bold">#{index + 1} {player.name}</p>
-              <p className="text-slate-500 text-sm">{player.bestRegion}</p>
+            <div className="flex items-center gap-3">
+              <PlayerAvatar playerName={player.name} className="h-12 w-12" />
+
+              <div>
+                <p className="font-bold">#{index + 1} {player.name}</p>
+                <p className="text-slate-500 text-sm">{player.bestRegion}</p>
+              </div>
             </div>
 
             <div className="text-right">
@@ -1327,9 +1347,13 @@ function RecentFormTable({ playerStats = [] }) {
             key={player.name}
             className="grid grid-cols-1 md:grid-cols-6 gap-3 md:gap-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border border-white/10"
           >
-            <div>
-              <p className="font-black">#{index + 1} {player.name}</p>
-              <p className="text-slate-500 text-xs md:hidden">Last {player.recentForm.sampleSize} guesses</p>
+            <div className="flex items-center gap-3">
+              <PlayerAvatar playerName={player.name} className="h-12 w-12" />
+
+              <div>
+                <p className="font-black">#{index + 1} {player.name}</p>
+                <p className="text-slate-500 text-xs md:hidden">Last {player.recentForm.sampleSize} guesses</p>
+              </div>
             </div>
 
             <div className="font-semibold">
