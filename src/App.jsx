@@ -438,10 +438,10 @@ const liveRegions = useMemo(() => {
   }));
 }, [regionStats]);
   return (
-    <div className="min-h-screen bg-[#070b14] text-white overflow-hidden">
+    <div className="min-h-screen bg-[#070b14] text-white overflow-x-hidden">
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_top_right,#1d4ed830,transparent_35%),radial-gradient(circle_at_bottom_left,#06b6d430,transparent_35%)] pointer-events-none" />
 
-      <div className="relative z-10 p-6 md:p-10">
+      <div className="relative z-10 p-4 sm:p-6 md:p-10">
         <TopNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
         <FilterBar
@@ -450,16 +450,17 @@ const liveRegions = useMemo(() => {
           selectedModes={selectedModes}
           setSelectedModes={setSelectedModes}
         />
-<div className="mb-6 text-sm font-bold">
+<div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs sm:text-sm font-bold">
   <p className="text-green-400">
     Raw Entries: {rawData.length}
   </p>
 
   <p className="text-cyan-400">
     Daily Entries: {dailyData.length}
-    <p className="text-pink-400">
-  Players Loaded: {playerStats.length}
-</p>
+  </p>
+
+  <p className="text-pink-400">
+    Players Loaded: {playerStats.length}
   </p>
 </div>
         {activeTab === "feed" && <FeedTab liveMatches={liveMatches} />}
@@ -487,23 +488,23 @@ function TopNav({ activeTab, setActiveTab }) {
     ]
 
   return (
-    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 mb-10">
+    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 sm:gap-6 mb-6 sm:mb-10">
       <div>
-        <p className="uppercase tracking-[0.3em] text-cyan-400 text-xs font-bold mb-2">
+        <p className="uppercase tracking-[0.24em] sm:tracking-[0.3em] text-cyan-400 text-[0.65rem] sm:text-xs font-bold mb-2">
           GeoGuessr League
         </p>
 
-        <h1 className="text-4xl md:text-5xl font-black tracking-tight">
+        <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight">
           GEOCOMMAND
         </h1>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 bg-white/5 border border-white/10 rounded-2xl p-2 backdrop-blur-xl">
+      <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-2 backdrop-blur-xl overflow-x-auto max-w-full">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-5 py-2 rounded-xl font-semibold transition-all ${
+            className={`shrink-0 px-3 sm:px-5 py-2 rounded-xl text-sm sm:text-base font-semibold transition-all ${
               activeTab === tab.id
                 ? "bg-cyan-500 text-black"
                 : "text-slate-400 hover:text-white hover:bg-white/5"
@@ -519,28 +520,28 @@ function TopNav({ activeTab, setActiveTab }) {
 
 function PageHeader({ eyebrow, title, description }) {
   return (
-    <div className="flex flex-col md:flex-row md:items-end md:justify-between mb-8">
+    <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5 mb-6 sm:mb-8">
       <div>
-        <p className="uppercase tracking-[0.3em] text-cyan-400 text-xs font-bold mb-3">
+        <p className="uppercase tracking-[0.24em] sm:tracking-[0.3em] text-cyan-400 text-[0.65rem] sm:text-xs font-bold mb-3">
           {eyebrow}
         </p>
 
-        <h2 className="text-4xl md:text-6xl font-black tracking-tight leading-none">
+        <h2 className="text-3xl sm:text-4xl md:text-6xl font-black tracking-tight leading-tight md:leading-none break-words">
           {title}
         </h2>
 
-        <p className="text-slate-400 mt-4 text-lg max-w-2xl">
+        <p className="text-slate-400 mt-3 sm:mt-4 text-sm sm:text-lg max-w-2xl">
           {description}
         </p>
       </div>
 
-      <div className="mt-6 md:mt-0 bg-white/5 border border-white/10 backdrop-blur-xl rounded-3xl px-6 py-5 shadow-2xl">
+      <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl px-4 sm:px-6 py-4 sm:py-5 shadow-2xl">
         <p className="text-slate-400 text-xs uppercase tracking-widest">
           Current Season
         </p>
 
         <div className="flex items-end gap-3 mt-2">
-          <span className="text-5xl font-black">03</span>
+          <span className="text-4xl sm:text-5xl font-black">03</span>
           <span className="text-cyan-400 font-semibold mb-1">Week 7</span>
         </div>
       </div>
@@ -557,18 +558,18 @@ function StatCard({ label, value, sub, accent = "cyan" }) {
   }
 
   return (
-    <div className={`relative overflow-hidden rounded-3xl border ${colors[accent]} bg-white/5 backdrop-blur-xl p-6 shadow-2xl`}>
+    <div className={`relative overflow-hidden rounded-2xl sm:rounded-3xl border ${colors[accent]} bg-white/5 backdrop-blur-xl p-4 sm:p-6 shadow-2xl min-w-0`}>
       <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl ${colors[accent].split(" ")[2]}`} />
 
-      <p className="text-slate-400 text-sm uppercase tracking-wider">
+      <p className="text-slate-400 text-xs sm:text-sm uppercase tracking-wider">
         {label}
       </p>
 
-      <h3 className="text-4xl font-black mt-3">
+      <h3 className="text-2xl sm:text-4xl font-black mt-3 break-words">
         {value}
       </h3>
 
-      <p className={`mt-6 font-semibold ${colors[accent].split(" ")[1]}`}>
+      <p className={`mt-4 sm:mt-6 text-sm sm:text-base font-semibold ${colors[accent].split(" ")[1]}`}>
         {sub}
       </p>
     </div>
@@ -732,11 +733,11 @@ function RegionsTab({ regionStats, countryStats }) {
         title="Regions & Countries"
         description="Regional performance, strongest territories, map-read consistency, and location-specific dominance."
       />
-<div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-end gap-3">
-  <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-2 backdrop-blur-xl">
+<div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center md:justify-end gap-3">
+  <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-2 backdrop-blur-xl overflow-x-auto">
     <button
       onClick={() => setViewMode("regions")}
-      className={`px-5 py-2 rounded-xl font-bold transition-all ${
+      className={`shrink-0 px-4 sm:px-5 py-2 rounded-xl text-sm sm:text-base font-bold transition-all ${
         viewMode === "regions"
           ? "bg-cyan-500 text-black"
           : "text-slate-400 hover:text-white hover:bg-white/5"
@@ -747,7 +748,7 @@ function RegionsTab({ regionStats, countryStats }) {
 
     <button
       onClick={() => setViewMode("countries")}
-      className={`px-5 py-2 rounded-xl font-bold transition-all ${
+      className={`shrink-0 px-4 sm:px-5 py-2 rounded-xl text-sm sm:text-base font-bold transition-all ${
         viewMode === "countries"
           ? "bg-cyan-500 text-black"
           : "text-slate-400 hover:text-white hover:bg-white/5"
@@ -757,10 +758,10 @@ function RegionsTab({ regionStats, countryStats }) {
     </button>
   </div>
 
-  <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-2 backdrop-blur-xl">
+  <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-2 backdrop-blur-xl overflow-x-auto">
     <button
       onClick={() => setMapMetric("distance")}
-      className={`px-5 py-2 rounded-xl font-bold transition-all ${
+      className={`shrink-0 px-4 sm:px-5 py-2 rounded-xl text-sm sm:text-base font-bold transition-all ${
         mapMetric === "distance"
           ? "bg-cyan-500 text-black"
           : "text-slate-400 hover:text-white hover:bg-white/5"
@@ -771,7 +772,7 @@ function RegionsTab({ regionStats, countryStats }) {
 
     <button
       onClick={() => setMapMetric("volume")}
-      className={`px-5 py-2 rounded-xl font-bold transition-all ${
+      className={`shrink-0 px-4 sm:px-5 py-2 rounded-xl text-sm sm:text-base font-bold transition-all ${
         mapMetric === "volume"
           ? "bg-cyan-500 text-black"
           : "text-slate-400 hover:text-white hover:bg-white/5"
@@ -818,15 +819,15 @@ function RegionsTab({ regionStats, countryStats }) {
         {activeGeoStats.map((region) => (
           <div
             key={region.name}
-            className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 shadow-2xl hover:bg-white/10 transition-all"
+            className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl hover:bg-white/10 transition-all"
           >
-            <div className="flex items-start justify-between mb-6">
+            <div className="flex items-start justify-between gap-4 mb-5 sm:mb-6">
               <div>
                 <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
                   {geoLabel} Intelligence
                 </p>
 
-                <h3 className="text-2xl font-black">
+                <h3 className="text-xl sm:text-2xl font-black break-words">
                   {region.name}
                 </h3>
               </div>
@@ -959,28 +960,28 @@ function PlayersTab({ playerStats = [], dailyData = [] }) {
           <button
             key={player.name}
             onClick={() => setSelectedPlayerName(player.name)}
-            className={`relative overflow-hidden text-left bg-white/5 backdrop-blur-xl border rounded-[2rem] p-6 shadow-2xl transition-all hover:scale-[1.02] ${brand.border} ${brand.glow} ${
+            className={`relative overflow-hidden text-left bg-white/5 backdrop-blur-xl border rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl transition-all hover:scale-[1.02] ${brand.border} ${brand.glow} ${
               isSelected ? "ring-2 ring-cyan-300/70" : ""
             }`}
 >
             <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 blur-3xl" />
 
-            <div className="relative z-10 flex items-start justify-between gap-4 mb-5">
-              <PlayerAvatar playerName={player.name} className="h-24 w-24" />
+            <div className="relative z-10 flex items-start justify-between gap-3 sm:gap-4 mb-5">
+              <PlayerAvatar playerName={player.name} className="h-20 w-20 sm:h-24 sm:w-24" />
 
-              <div className="flex items-center gap-2">
-                <TeamLogo teamName={player.team} className="h-9 w-9" />
-                <span className={`text-xs font-black uppercase tracking-[0.2em] ${brand.accent}`}>
+              <div className="flex items-center gap-2 min-w-0">
+                <TeamLogo teamName={player.team} className="h-8 w-8 sm:h-9 sm:w-9" />
+                <span className={`text-[0.65rem] sm:text-xs font-black uppercase tracking-[0.16em] sm:tracking-[0.2em] truncate ${brand.accent}`}>
                   {player.team}
                 </span>
               </div>
             </div>
 
-            <h3 className="text-3xl font-black mb-6">
+            <h3 className="text-2xl sm:text-3xl font-black mb-5 sm:mb-6 break-words">
               {player.name}
             </h3>
 
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <MiniStat label="CTPs" value={player.ctps} accent="text-cyan-400" />
               <MiniStat label="Avg Distance" value={formatDistance(player.avgDistance)} />
               <MiniStat label="Best Region" value={player.bestRegion} accent="text-purple-400" />
@@ -1032,10 +1033,10 @@ function PlayerProfileDetail({ player }) {
 
   return (
     <div className="space-y-6">
-      <div className={`rounded-[2rem] border ${brand.border} bg-white/5 p-6`}>
+      <div className={`rounded-2xl sm:rounded-[2rem] border ${brand.border} bg-white/5 p-4 sm:p-6`}>
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
           <div className="flex flex-col sm:flex-row sm:items-end gap-5">
-            <PlayerAvatar playerName={player.name} className="h-40 w-40" />
+            <PlayerAvatar playerName={player.name} className="h-32 w-32 sm:h-40 sm:w-40" />
 
             <div>
               <div className="flex items-center gap-3 mb-3">
@@ -1045,14 +1046,14 @@ function PlayerProfileDetail({ player }) {
                 </p>
               </div>
 
-              <h3 className="text-5xl font-black">{player.name}</h3>
-              <p className="text-slate-400 mt-3">
+              <h3 className="text-3xl sm:text-5xl font-black break-words">{player.name}</h3>
+              <p className="text-slate-400 mt-3 text-sm sm:text-base">
                 {player.consistency} season profile with {player.ctps} CTPs and {player.kos} KOs.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 min-w-64">
+          <div className="grid grid-cols-2 gap-3 w-full lg:w-auto lg:min-w-64">
             <MiniStat label="Season Avg" value={formatDistance(player.avgDistance)} accent="text-cyan-400" />
             <MiniStat label="Daily Avg" value={formatDistance(daily?.avgDistance)} accent="text-emerald-400" />
           </div>
@@ -1199,7 +1200,7 @@ function PlayerHeadToHead({
 
 function Panel({ children, className = "" }) {
   return (
-    <div className={`bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 shadow-2xl ${className}`}>
+    <div className={`bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl min-w-0 ${className}`}>
       {children}
     </div>
   )
@@ -1207,18 +1208,18 @@ function Panel({ children, className = "" }) {
 
 function PanelHeader({ eyebrow, title, right }) {
   return (
-    <div className="flex items-center justify-between mb-6">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-5 sm:mb-6">
       <div>
-        <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
+        <p className="text-cyan-400 uppercase tracking-[0.2em] text-[0.65rem] sm:text-xs font-bold mb-2">
           {eyebrow}
         </p>
 
-        <h3 className="text-3xl font-black">
+        <h3 className="text-2xl sm:text-3xl font-black break-words">
           {title}
         </h3>
       </div>
 
-      <div className="text-slate-500 text-sm">
+      <div className="text-slate-500 text-xs sm:text-sm">
         {right}
       </div>
     </div>
@@ -1228,7 +1229,7 @@ function PanelHeader({ eyebrow, title, right }) {
 function StandingsTable({ teamStats = [] }) {
   return (
     <>
-      <div className="grid grid-cols-4 text-slate-500 text-sm border-b border-white/10 pb-3 px-4">
+      <div className="hidden sm:grid grid-cols-4 text-slate-500 text-sm border-b border-white/10 pb-3 px-4">
         <div>Team</div>
         <div>CTPs</div>
         <div>Avg Distance</div>
@@ -1242,9 +1243,9 @@ function StandingsTable({ teamStats = [] }) {
   return (
     <div
       key={team.name}
-      className={`grid grid-cols-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border ${brand.border} ${brand.glow}`}
+      className={`grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border ${brand.border} ${brand.glow}`}
     >
-      <div className="font-bold">
+      <div className="font-bold col-span-2 sm:col-span-1">
         <span className={`flex items-center gap-3 ${brand.accent}`}>
           <TeamLogo teamName={team.name} className="h-8 w-8" />
           {team.name}
@@ -1252,14 +1253,17 @@ function StandingsTable({ teamStats = [] }) {
       </div>
 
       <div className="font-semibold">
+        <span className="sm:hidden text-slate-500 text-xs block">CTPs</span>
         {team.ctps}
       </div>
 
       <div>
+        <span className="sm:hidden text-slate-500 text-xs block">Avg Distance</span>
         {team.avgDistance.toFixed(1)} km
       </div>
 
       <div className="text-emerald-400 font-semibold">
+        <span className="sm:hidden text-slate-500 text-xs block">KOs</span>
         {team.kos} KOs
       </div>
     </div>
@@ -1274,12 +1278,12 @@ function PlayerList({ playerStats = [] }) {
   return (
     <div className="space-y-3">
       {playerStats.slice(0, 5).map((player) => (
-        <div key={player.name} className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/10">
+        <div key={player.name} className="flex items-center justify-between gap-3 bg-white/5 rounded-2xl p-4 border border-white/10">
           <div className="flex items-center gap-3">
             <PlayerAvatar playerName={player.name} className="h-12 w-12" />
 
-            <div>
-              <p className="font-bold">{player.name}</p>
+            <div className="min-w-0">
+              <p className="font-bold truncate">{player.name}</p>
               <p className="text-slate-500 text-sm">{player.team}</p>
             </div>
           </div>
@@ -1301,12 +1305,12 @@ function AverageDistanceList({ playerStats = [] }) {
         .sort((a, b) => a.avgDistance - b.avgDistance)
         .slice(0, 6)
         .map((player, index) => (
-          <div key={player.name} className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/10">
+          <div key={player.name} className="flex items-center justify-between gap-3 bg-white/5 rounded-2xl p-4 border border-white/10">
             <div className="flex items-center gap-3">
               <PlayerAvatar playerName={player.name} className="h-12 w-12" />
 
-              <div>
-                <p className="font-bold">#{index + 1} {player.name}</p>
+              <div className="min-w-0">
+                <p className="font-bold truncate">#{index + 1} {player.name}</p>
                 <p className="text-slate-500 text-sm">{player.bestRegion}</p>
               </div>
             </div>
@@ -1390,12 +1394,12 @@ function RecentFormTable({ playerStats = [] }) {
 
 function MiniStat({ label, value, accent = "" }) {
   return (
-    <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-      <p className="text-slate-500 text-sm mb-2">
+    <div className="bg-white/5 rounded-2xl p-3 sm:p-4 border border-white/10 min-w-0">
+      <p className="text-slate-500 text-xs sm:text-sm mb-2">
         {label}
       </p>
 
-      <h4 className={`text-2xl font-black ${accent}`}>
+      <h4 className={`text-xl sm:text-2xl font-black break-words ${accent}`}>
         {value}
       </h4>
     </div>
@@ -1536,7 +1540,7 @@ function FilterBar({
   }
 
   return (
-    <div className="mb-8 bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-xl flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+    <div className="mb-6 sm:mb-8 bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-xl flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
       <div>
         <p className="text-slate-500 text-xs uppercase tracking-[0.2em] font-bold mb-1">
           Global Filters
@@ -1547,23 +1551,23 @@ function FilterBar({
         </p>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4">
+      <div className="flex flex-col md:flex-row gap-3 sm:gap-4">
         <select
           value={selectedTeam}
           onChange={(event) => setSelectedTeam(event.target.value)}
-          className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white"
+          className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white w-full md:w-auto"
         >
           <option value="All">All Teams</option>
           <option value="Lats">Lats</option>
           <option value="Bontswana">Bontswana</option>
         </select>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2 overflow-x-auto md:flex-wrap">
           {modes.map((mode) => (
             <button
               key={mode}
               onClick={() => toggleMode(mode)}
-              className={`px-4 py-3 rounded-xl text-sm font-bold border transition-all ${
+              className={`shrink-0 px-4 py-3 rounded-xl text-sm font-bold border transition-all ${
                 selectedModes.includes(mode)
                   ? "bg-cyan-500 text-black border-cyan-400"
                   : "bg-white/5 text-slate-400 border-white/10 hover:text-white"
@@ -1639,27 +1643,27 @@ function GeoHeatMap({ regionStats = [], metric = "distance" }) {
   const unmappedCount = regionStats.length - mappedRegions.length
 
   return (
-    <div className="relative h-[360px] md:h-[520px] rounded-[2rem] bg-[#060b14] border border-white/10 overflow-hidden">
-      <div className="absolute left-4 top-4 z-10 flex flex-wrap gap-2">
+    <div className="relative h-[340px] sm:h-[420px] md:h-[520px] rounded-2xl sm:rounded-[2rem] bg-[#060b14] border border-white/10 overflow-hidden">
+      <div className="absolute left-3 sm:left-4 top-3 sm:top-4 z-10 flex max-w-[calc(100%-1.5rem)] sm:max-w-none overflow-x-auto gap-2 pb-1">
         {[
           ["Strong", "#34d399", "< 50 km"],
           ["Mixed", "#fbbf24", "50-149 km"],
           ["Weak", "#fb7185", "150+ km"],
         ].map(([label, color, range]) => (
-          <div key={label} className="flex items-center gap-2 rounded-xl bg-slate-950/80 border border-white/10 px-3 py-2 text-xs font-bold">
+          <div key={label} className="shrink-0 flex items-center gap-2 rounded-xl bg-slate-950/80 border border-white/10 px-3 py-2 text-xs font-bold">
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
             <span>{label}</span>
-            <span className="text-slate-500">{range}</span>
+            <span className="hidden sm:inline text-slate-500">{range}</span>
           </div>
         ))}
       </div>
 
       {activeRegion && (
-        <div className="absolute right-4 top-4 z-10 rounded-2xl bg-slate-950/90 border border-white/10 p-4 shadow-2xl min-w-52 max-w-[calc(100%-2rem)]">
+        <div className="absolute left-3 right-3 bottom-14 sm:left-auto sm:right-4 sm:top-4 sm:bottom-auto z-10 rounded-2xl bg-slate-950/90 border border-white/10 p-3 sm:p-4 shadow-2xl sm:min-w-52">
           <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
             Map Readout
           </p>
-          <p className="text-xl font-black">{activeRegion.name}</p>
+          <p className="text-lg sm:text-xl font-black">{activeRegion.name}</p>
           <p className={`font-bold ${activeRegion.tier.text}`}>
             {activeRegion.tier.label} • {formatDistance(activeRegion.avgDistance)}
           </p>
@@ -1669,7 +1673,7 @@ function GeoHeatMap({ regionStats = [], metric = "distance" }) {
         </div>
       )}
 
-      <div className="absolute bottom-4 left-4 z-10 rounded-2xl bg-slate-950/80 border border-white/10 px-4 py-3 text-xs text-slate-400">
+      <div className="absolute bottom-3 left-3 right-3 sm:right-auto sm:bottom-4 sm:left-4 z-10 rounded-2xl bg-slate-950/80 border border-white/10 px-3 sm:px-4 py-2 sm:py-3 text-xs text-slate-400">
         Marker size shows {metric === "volume" ? "how often a place appears" : "average miss distance"}.
         {unmappedCount > 0 && <span> {unmappedCount} item(s) need coordinates.</span>}
       </div>

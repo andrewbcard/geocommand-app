@@ -36,7 +36,7 @@ export default function DailyChallengeTab({ dailyData = [] }) {
         description="Live stats from the Daily Challenges sheet: country hits, region hits, distance, timing, date, and mode."
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
         <StatCard label="Total Guesses" value={dailyData.length} sub="All daily entries" accent="cyan" />
         <StatCard
           label="Best Avg Distance"
@@ -58,7 +58,7 @@ export default function DailyChallengeTab({ dailyData = [] }) {
         />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
         <Panel className="xl:col-span-2">
           <PanelHeader eyebrow="Daily Rankings" title="Player Leaderboard" right="Lower Distance Wins" />
           <DailyPlayerTable playerStats={playerStats} />
@@ -70,7 +70,7 @@ export default function DailyChallengeTab({ dailyData = [] }) {
         </Panel>
       </div>
 
-      <Panel className="mb-8">
+      <Panel className="mb-6 sm:mb-8">
         <PanelHeader eyebrow="Head-to-Head" title="Player Comparison" right="Daily Challenge" />
         <DailyComparison
           playerStats={playerStats}
@@ -83,7 +83,7 @@ export default function DailyChallengeTab({ dailyData = [] }) {
         />
       </Panel>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
         {playerStats.map((player) => (
           <DailyPlayerCard key={player.name} player={player} />
         ))}
@@ -96,7 +96,7 @@ export default function DailyChallengeTab({ dailyData = [] }) {
           {dailyData.slice(0, 12).map((row, index) => (
             <div
               key={index}
-              className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center bg-white/5 rounded-2xl p-4 border border-white/10"
+              className="grid grid-cols-2 md:grid-cols-6 gap-3 md:gap-4 items-center bg-white/5 rounded-2xl p-4 border border-white/10"
             >
               <div>
                 <p className="text-slate-500 text-xs">Player</p>
@@ -164,14 +164,14 @@ function DailyComparison({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <select value={compareA} onChange={(event) => setCompareA(event.target.value)} className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+        <select value={compareA} onChange={(event) => setCompareA(event.target.value)} className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white w-full">
           {playerStats.map((player) => (
             <option key={player.name} value={player.name}>{player.name}</option>
           ))}
         </select>
 
-        <select value={compareB} onChange={(event) => setCompareB(event.target.value)} className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white">
+        <select value={compareB} onChange={(event) => setCompareB(event.target.value)} className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white w-full">
           {playerStats.map((player) => (
             <option key={player.name} value={player.name}>{player.name}</option>
           ))}
@@ -180,15 +180,15 @@ function DailyComparison({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {[playerA, playerB].map((player) => (
-          <div key={player?.name || "empty"} className="bg-white/5 rounded-2xl p-5 border border-white/10">
+          <div key={player?.name || "empty"} className="bg-white/5 rounded-2xl p-4 sm:p-5 border border-white/10">
             <div className="flex items-center gap-4 mb-4">
-              <PlayerAvatar playerName={player?.name} className="h-16 w-16" />
+              <PlayerAvatar playerName={player?.name} className="h-14 w-14 sm:h-16 sm:w-16" />
 
               <div>
                 <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
                   Profile Snapshot
                 </p>
-                <h4 className="text-2xl font-black">{player?.name || "Choose a player"}</h4>
+                <h4 className="text-xl sm:text-2xl font-black break-words">{player?.name || "Choose a player"}</h4>
               </div>
             </div>
 
@@ -202,10 +202,10 @@ function DailyComparison({
 
       <div className="space-y-3">
         {metrics.map((metric) => (
-          <div key={metric.label} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center bg-white/5 rounded-2xl p-4 border border-white/10">
+          <div key={metric.label} className="grid grid-cols-2 md:grid-cols-3 gap-3 items-center bg-white/5 rounded-2xl p-4 border border-white/10">
             <p className="text-slate-400 font-bold">{metric.label}</p>
-            <p className={`text-2xl font-black ${metricWinner(metric, "a")}`}>{metric.format(metric.a)}</p>
-            <p className={`text-2xl font-black ${metricWinner(metric, "b")}`}>{metric.format(metric.b)}</p>
+            <p className={`text-xl sm:text-2xl font-black ${metricWinner(metric, "a")}`}>{metric.format(metric.a)}</p>
+            <p className={`text-xl sm:text-2xl font-black ${metricWinner(metric, "b")}`}>{metric.format(metric.b)}</p>
           </div>
         ))}
       </div>
@@ -226,12 +226,12 @@ function DailyPlayerTable({ playerStats = [] }) {
 
       <div className="space-y-3 mt-4">
         {playerStats.map((player, index) => (
-          <div key={player.name} className="grid grid-cols-1 md:grid-cols-5 gap-3 md:gap-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border border-white/10">
+          <div key={player.name} className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border border-white/10">
             <div className="flex items-center gap-3">
               <PlayerAvatar playerName={player.name} className="h-12 w-12" />
 
-              <div>
-                <p className="font-black">#{index + 1} {player.name}</p>
+              <div className="min-w-0">
+                <p className="font-black truncate">#{index + 1} {player.name}</p>
                 <p className="text-slate-500 text-xs md:hidden">{player.guesses} guesses</p>
               </div>
             </div>
@@ -248,25 +248,25 @@ function DailyPlayerTable({ playerStats = [] }) {
 
 function DailyPlayerCard({ player }) {
   return (
-    <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2rem] p-6 shadow-2xl hover:bg-white/10 transition-all">
-      <div className="flex items-end gap-4 mb-6">
-        <PlayerAvatar playerName={player.name} className="h-24 w-24" />
+    <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl hover:bg-white/10 transition-all">
+      <div className="flex items-end gap-4 mb-5 sm:mb-6">
+        <PlayerAvatar playerName={player.name} className="h-20 w-20 sm:h-24 sm:w-24" />
 
         <div>
           <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
             Daily Profile
           </p>
-          <h3 className="text-3xl font-black">{player.name}</h3>
+          <h3 className="text-2xl sm:text-3xl font-black break-words">{player.name}</h3>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4">
         <MiniStat label="Guesses" value={player.guesses} />
         <MiniStat label="Avg Distance" value={formatDistance(player.avgDistance)} accent="text-cyan-400" />
         <MiniStat label="Country Hit" value={formatPercent(player.countryHitRate)} accent="text-purple-400" />
         <MiniStat label="Region Hit" value={formatPercent(player.regionHitRate)} accent="text-pink-400" />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-3 sm:mt-4">
         <MiniStat label="Strongest Region" value={player.strongestRegion} accent="text-emerald-400" />
         <MiniStat label="Weakest Region" value={player.weakestRegion} accent="text-amber-400" />
       </div>
