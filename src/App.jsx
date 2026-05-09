@@ -541,8 +541,8 @@ function PageHeader({ eyebrow, title, description }) {
         </p>
 
         <div className="flex items-end gap-3 mt-2">
-          <span className="text-4xl sm:text-5xl font-black">03</span>
-          <span className="text-cyan-400 font-semibold mb-1">Week 7</span>
+          <span className="text-4xl sm:text-5xl font-black">01</span>
+          <span className="text-cyan-400 font-semibold mb-1">Week 12</span>
         </div>
       </div>
     </div>
