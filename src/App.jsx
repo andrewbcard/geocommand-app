@@ -12,7 +12,7 @@ import {
 import * as d3 from "d3"
 import { feature } from "topojson-client";
 import DailyChallengeTab from "./components/DailyChallengeTab.jsx"
-import { formatDistance, getDistanceTier } from "./data/stats.js"
+import { buildDailyPlayerStats, formatDistance, formatPercent, getDistanceTier } from "./data/stats.js"
 
 const WORLD_TOPO_JSON =
   "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
@@ -416,7 +416,7 @@ const liveRegions = useMemo(() => {
             countryStats={countryStats}
           />
         )}
-        {activeTab === "players" && <PlayersTab playerStats={playerStats} />}
+        {activeTab === "players" && <PlayersTab playerStats={playerStats} dailyData={filteredDailyData} />}
         {activeTab === "daily" && <DailyChallengeTab dailyData={filteredDailyData} />}
       </div>
     </div>
@@ -633,6 +633,7 @@ function FeedTab({ liveMatches = [] }) {
 
 function RegionsTab({ regionStats, countryStats }) {
   const [viewMode, setViewMode] = useState("regions")
+  const [mapMetric, setMapMetric] = useState("distance")
   const activeGeoStats =
   viewMode === "regions" ? regionStats : countryStats
 
@@ -651,7 +652,7 @@ function RegionsTab({ regionStats, countryStats }) {
         title="Regions & Countries"
         description="Regional performance, strongest territories, map-read consistency, and location-specific dominance."
       />
-<div className="mb-8 flex justify-end">
+<div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-end gap-3">
   <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-2 backdrop-blur-xl">
     <button
       onClick={() => setViewMode("regions")}
@@ -675,15 +676,39 @@ function RegionsTab({ regionStats, countryStats }) {
       Countries
     </button>
   </div>
+
+  <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-2 backdrop-blur-xl">
+    <button
+      onClick={() => setMapMetric("distance")}
+      className={`px-5 py-2 rounded-xl font-bold transition-all ${
+        mapMetric === "distance"
+          ? "bg-cyan-500 text-black"
+          : "text-slate-400 hover:text-white hover:bg-white/5"
+      }`}
+    >
+      Distance
+    </button>
+
+    <button
+      onClick={() => setMapMetric("volume")}
+      className={`px-5 py-2 rounded-xl font-bold transition-all ${
+        mapMetric === "volume"
+          ? "bg-cyan-500 text-black"
+          : "text-slate-400 hover:text-white hover:bg-white/5"
+      }`}
+    >
+      Volume
+    </button>
+  </div>
 </div>
       <Panel className="mb-8">
         <PanelHeader
           eyebrow="Precision Map"
-          title={`${geoLabel} Heatmap`}
-          right="Avg Distance"
+          title={`${geoLabel} Map`}
+          right={mapMetric === "distance" ? "Avg Distance" : "Appearances"}
         />
 
-        <GeoHeatMap regionStats={activeGeoStats} />
+        <GeoHeatMap regionStats={activeGeoStats} metric={mapMetric} />
       </Panel>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -774,23 +799,89 @@ function RegionsTab({ regionStats, countryStats }) {
   )
 }
 
-function PlayersTab({ playerStats }) {
+function PlayersTab({ playerStats = [], dailyData = [] }) {
+  const dailyPlayerStats = useMemo(() => buildDailyPlayerStats(dailyData), [dailyData])
+  const playerProfiles = useMemo(() => {
+    return playerStats.map((player) => ({
+      ...player,
+      daily: dailyPlayerStats.find((dailyPlayer) => dailyPlayer.name === player.name),
+    }))
+  }, [playerStats, dailyPlayerStats])
+
+  const [selectedPlayerName, setSelectedPlayerName] = useState("")
+  const [comparePlayerName, setComparePlayerName] = useState("")
+  const selectedPlayer =
+    playerProfiles.find((player) => player.name === selectedPlayerName) || playerProfiles[0]
+  const comparisonPlayer =
+    playerProfiles.find((player) => player.name === comparePlayerName) ||
+    playerProfiles.find((player) => player.name !== selectedPlayer?.name)
+  const bestDailyPlayer = [...playerProfiles]
+    .filter((player) => player.daily)
+    .sort((a, b) => a.daily.avgDistance - b.daily.avgDistance)[0]
+
   return (
     <>
       <PageHeader
         eyebrow="Player Database"
-        title="Player Cards"
-        description="Individual dossiers for each league player, including team, accuracy, placement, and best region."
+        title="Player Profiles"
+        description="Individual dossiers for each league player, combining season performance, Daily Challenge form, and head-to-head comparison."
       />
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <StatCard
+          label="Most CTPs"
+          value={playerProfiles[0]?.name || "Loading"}
+          sub={`${playerProfiles[0]?.ctps || 0} CTPs`}
+          accent="cyan"
+        />
+
+        <StatCard
+          label="Best Season Avg"
+          value={formatDistance([...playerProfiles].sort((a, b) => a.avgDistance - b.avgDistance)[0]?.avgDistance)}
+          sub={[...playerProfiles].sort((a, b) => a.avgDistance - b.avgDistance)[0]?.name || "Loading"}
+          accent="purple"
+        />
+
+        <StatCard
+          label="Best Daily Avg"
+          value={formatDistance(bestDailyPlayer?.daily?.avgDistance)}
+          sub={bestDailyPlayer?.name || "Waiting for daily data"}
+          accent="emerald"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
+        <Panel className="xl:col-span-2">
+          <PanelHeader eyebrow="Profile Focus" title={selectedPlayer?.name || "Choose a Player"} right={selectedPlayer?.team || "Season"} />
+          <PlayerProfileDetail player={selectedPlayer} />
+        </Panel>
+
+        <Panel>
+          <PanelHeader eyebrow="Head-to-Head" title="Compare Players" right="Season + Daily" />
+          <PlayerHeadToHead
+            players={playerProfiles}
+            selectedPlayer={selectedPlayer}
+            comparisonPlayer={comparisonPlayer}
+            selectedPlayerName={selectedPlayer?.name || ""}
+            comparePlayerName={comparisonPlayer?.name || ""}
+            setSelectedPlayerName={setSelectedPlayerName}
+            setComparePlayerName={setComparePlayerName}
+          />
+        </Panel>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        {playerStats.map((player) => {
+        {playerProfiles.map((player) => {
           const brand = getTeamBrand(player.team)
+          const isSelected = selectedPlayer?.name === player.name
 
           return (
-          <div
+          <button
             key={player.name}
-            className={`relative overflow-hidden bg-white/5 backdrop-blur-xl border rounded-[2rem] p-6 shadow-2xl transition-all hover:scale-[1.02] ${brand.border} ${brand.glow}`}
+            onClick={() => setSelectedPlayerName(player.name)}
+            className={`relative overflow-hidden text-left bg-white/5 backdrop-blur-xl border rounded-[2rem] p-6 shadow-2xl transition-all hover:scale-[1.02] ${brand.border} ${brand.glow} ${
+              isSelected ? "ring-2 ring-cyan-300/70" : ""
+            }`}
 >
             <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 blur-3xl" />
 
@@ -806,8 +897,9 @@ function PlayersTab({ playerStats }) {
 
             <div className="space-y-4">
               <MiniStat label="CTPs" value={player.ctps} accent="text-cyan-400" />
-              <MiniStat label="Avg Distance" value={`${player.avgDistance.toFixed(1)} km`} />
+              <MiniStat label="Avg Distance" value={formatDistance(player.avgDistance)} />
               <MiniStat label="Best Region" value={player.bestRegion} accent="text-purple-400" />
+              <MiniStat label="Daily Hit Rate" value={formatPercent(player.daily?.countryHitRate)} accent="text-emerald-400" />
               <MiniStat
                 label="Consistency"
                 value={player.consistency}
@@ -815,7 +907,7 @@ function PlayersTab({ playerStats }) {
               />
               <MiniStat label="KOs" value={player.kos} accent="text-pink-400" />
             </div>
-          </div>
+          </button>
           )
         })}
       </div>
@@ -831,6 +923,163 @@ function PlayersTab({ playerStats }) {
         </Panel>
       </div>
     </>
+  )
+}
+
+function PlayerProfileDetail({ player }) {
+  if (!player) {
+    return (
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-slate-400">
+        Player data will appear here once the sheet loads.
+      </div>
+    )
+  }
+
+  const brand = getTeamBrand(player.team)
+  const daily = player.daily
+  const regionRanks = Object.entries(player.regions || {})
+    .map(([name, data]) => ({
+      name,
+      appearances: data.count,
+      avgDistance: data.totalDistance / data.count,
+    }))
+    .sort((a, b) => a.avgDistance - b.avgDistance)
+
+  return (
+    <div className="space-y-6">
+      <div className={`rounded-[2rem] border ${brand.border} bg-white/5 p-6`}>
+        <p className={`uppercase tracking-[0.2em] text-xs font-bold mb-2 ${brand.accent}`}>
+          {brand.logo} {player.team || "Free Agent"}
+        </p>
+
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+          <div>
+            <h3 className="text-5xl font-black">{player.name}</h3>
+            <p className="text-slate-400 mt-3">
+              {player.consistency} season profile with {player.ctps} CTPs and {player.kos} KOs.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 min-w-64">
+            <MiniStat label="Season Avg" value={formatDistance(player.avgDistance)} accent="text-cyan-400" />
+            <MiniStat label="Daily Avg" value={formatDistance(daily?.avgDistance)} accent="text-emerald-400" />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <MiniStat label="Country Hit" value={formatPercent(daily?.countryHitRate)} accent="text-purple-400" />
+        <MiniStat label="Region Hit" value={formatPercent(daily?.regionHitRate)} accent="text-pink-400" />
+        <MiniStat label="Daily Strongest" value={daily?.strongestRegion || "N/A"} accent="text-emerald-400" />
+        <MiniStat label="Daily Weakest" value={daily?.weakestRegion || "N/A"} accent="text-amber-400" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
+          <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-4">
+            Best Season Regions
+          </p>
+          <div className="space-y-3">
+            {regionRanks.slice(0, 4).map((region) => (
+              <div key={region.name} className="flex items-center justify-between gap-4">
+                <span className="font-bold">{region.name}</span>
+                <span className="text-cyan-300 font-black">{formatDistance(region.avgDistance)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
+          <p className="text-pink-400 uppercase tracking-[0.2em] text-xs font-bold mb-4">
+            Watch List
+          </p>
+          <div className="space-y-3">
+            {[...regionRanks].reverse().slice(0, 4).map((region) => (
+              <div key={region.name} className="flex items-center justify-between gap-4">
+                <span className="font-bold">{region.name}</span>
+                <span className="text-pink-300 font-black">{formatDistance(region.avgDistance)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PlayerHeadToHead({
+  players,
+  selectedPlayer,
+  comparisonPlayer,
+  selectedPlayerName,
+  comparePlayerName,
+  setSelectedPlayerName,
+  setComparePlayerName,
+}) {
+  const metrics = [
+    { label: "Season Avg", a: selectedPlayer?.avgDistance, b: comparisonPlayer?.avgDistance, format: formatDistance, lowerWins: true },
+    { label: "CTPs", a: selectedPlayer?.ctps, b: comparisonPlayer?.ctps, format: (value) => value || 0 },
+    { label: "KOs", a: selectedPlayer?.kos, b: comparisonPlayer?.kos, format: (value) => value || 0 },
+    { label: "Daily Avg", a: selectedPlayer?.daily?.avgDistance, b: comparisonPlayer?.daily?.avgDistance, format: formatDistance, lowerWins: true },
+    { label: "Country Hit", a: selectedPlayer?.daily?.countryHitRate, b: comparisonPlayer?.daily?.countryHitRate, format: formatPercent },
+    { label: "Region Hit", a: selectedPlayer?.daily?.regionHitRate, b: comparisonPlayer?.daily?.regionHitRate, format: formatPercent },
+  ]
+
+  function winnerClass(metric, side) {
+    if (!Number.isFinite(metric.a) || !Number.isFinite(metric.b) || metric.a === metric.b) {
+      return "text-slate-300"
+    }
+
+    const aWins = metric.lowerWins ? metric.a < metric.b : metric.a > metric.b
+    return (side === "a" && aWins) || (side === "b" && !aWins)
+      ? "text-emerald-300"
+      : "text-slate-300"
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-3">
+        <select
+          value={selectedPlayerName}
+          onChange={(event) => setSelectedPlayerName(event.target.value)}
+          className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white"
+        >
+          {players.map((player) => (
+            <option key={player.name} value={player.name}>
+              {player.name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={comparePlayerName}
+          onChange={(event) => setComparePlayerName(event.target.value)}
+          className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white"
+        >
+          {players.map((player) => (
+            <option key={player.name} value={player.name}>
+              {player.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="space-y-3">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="bg-white/5 rounded-2xl p-4 border border-white/10">
+            <p className="text-slate-500 text-sm mb-2">{metric.label}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <p className={`text-xl font-black ${winnerClass(metric, "a")}`}>
+                {metric.format(metric.a)}
+              </p>
+              <p className={`text-xl font-black ${winnerClass(metric, "b")}`}>
+                {metric.format(metric.b)}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -1115,9 +1364,10 @@ function FilterBar({
     </div>
   )
 }
-function GeoHeatMap({ regionStats = [] }) {
+function GeoHeatMap({ regionStats = [], metric = "distance" }) {
   const [worldData, setWorldData] = useState(null)
   const [hoveredRegion, setHoveredRegion] = useState(null)
+  const [selectedRegion, setSelectedRegion] = useState(null)
 
   useEffect(() => {
     fetch(WORLD_TOPO_JSON)
@@ -1138,6 +1388,10 @@ function GeoHeatMap({ regionStats = [] }) {
     .translate([500, 300])
 
   const path = d3.geoPath(projection)
+  const maxAppearances = Math.max(
+    1,
+    ...regionStats.map((item) => item.appearances || item.guesses || 0)
+  )
   const mappedRegions = regionStats
     .map((item) => {
       const coords = GEO_COORDS[item.name]
@@ -1147,9 +1401,15 @@ function GeoHeatMap({ regionStats = [] }) {
       if (!projected) return null
 
       const tier = getDistanceTier(item.avgDistance)
+      const appearances = item.appearances || item.guesses || 0
       const size = Math.min(
-        28,
-        Math.max(8, Math.sqrt(Math.max(item.avgDistance, 1)) * 1.3)
+        metric === "volume" ? 34 : 28,
+        Math.max(
+          8,
+          metric === "volume"
+            ? 8 + (appearances / maxAppearances) * 24
+            : Math.sqrt(Math.max(item.avgDistance, 1)) * 1.3
+        )
       )
 
       return {
@@ -1158,12 +1418,15 @@ function GeoHeatMap({ regionStats = [] }) {
         y: projected[1],
         size,
         tier,
+        appearances,
       }
     })
     .filter(Boolean)
+  const activeRegion = hoveredRegion || selectedRegion
+  const unmappedCount = regionStats.length - mappedRegions.length
 
   return (
-    <div className="relative h-[460px] rounded-[2rem] bg-[#060b14] border border-white/10 overflow-hidden">
+    <div className="relative h-[360px] md:h-[520px] rounded-[2rem] bg-[#060b14] border border-white/10 overflow-hidden">
       <div className="absolute left-4 top-4 z-10 flex flex-wrap gap-2">
         {[
           ["Strong", "#34d399", "< 50 km"],
@@ -1178,20 +1441,25 @@ function GeoHeatMap({ regionStats = [] }) {
         ))}
       </div>
 
-      {hoveredRegion && (
-        <div className="absolute right-4 top-4 z-10 rounded-2xl bg-slate-950/90 border border-white/10 p-4 shadow-2xl min-w-52">
+      {activeRegion && (
+        <div className="absolute right-4 top-4 z-10 rounded-2xl bg-slate-950/90 border border-white/10 p-4 shadow-2xl min-w-52 max-w-[calc(100%-2rem)]">
           <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
             Map Readout
           </p>
-          <p className="text-xl font-black">{hoveredRegion.name}</p>
-          <p className={`font-bold ${hoveredRegion.tier.text}`}>
-            {hoveredRegion.tier.label} • {formatDistance(hoveredRegion.avgDistance)}
+          <p className="text-xl font-black">{activeRegion.name}</p>
+          <p className={`font-bold ${activeRegion.tier.text}`}>
+            {activeRegion.tier.label} • {formatDistance(activeRegion.avgDistance)}
           </p>
           <p className="text-slate-500 text-xs mt-1">
-            {hoveredRegion.appearances || hoveredRegion.guesses || 0} entries
+            {activeRegion.appearances} entries
           </p>
         </div>
       )}
+
+      <div className="absolute bottom-4 left-4 z-10 rounded-2xl bg-slate-950/80 border border-white/10 px-4 py-3 text-xs text-slate-400">
+        Marker size shows {metric === "volume" ? "how often a place appears" : "average miss distance"}.
+        {unmappedCount > 0 && <span> {unmappedCount} item(s) need coordinates.</span>}
+      </div>
 
       <svg viewBox="0 0 1000 520" className="w-full h-full">
         {worldData &&
@@ -1212,6 +1480,7 @@ function GeoHeatMap({ regionStats = [] }) {
               transform={`translate(${item.x}, ${item.y})`}
               onMouseEnter={() => setHoveredRegion(item)}
               onMouseLeave={() => setHoveredRegion(null)}
+              onClick={() => setSelectedRegion(item)}
               className="cursor-pointer"
             >
               <circle
