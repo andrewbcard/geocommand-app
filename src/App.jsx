@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
 import {
   BarChart,
@@ -11,12 +11,13 @@ import {
 } from "recharts"
 import * as d3 from "d3"
 import { feature } from "topojson-client";
+import DailyChallengeTab from "./components/DailyChallengeTab.jsx"
+import { formatDistance, getDistanceTier } from "./data/stats.js"
 
 const WORLD_TOPO_JSON =
   "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
   const GEO_COORDS = {
       "North America": [-100, 45],
-  "United States": [-98.5795, 39.8283],
   "Central America": [-84, 12],
   "South America": [-60, -20],
   "Scandinavia": [15, 62],
@@ -87,18 +88,6 @@ function getTeamBrand(teamName) {
 
   return TEAM_BRANDING.Lats
 }
-const teams = [
-  { name: "Atlas", wins: 12, avgScore: "21,340", diff: "+4,122", color: "cyan" },
-  { name: "Vanguard", wins: 10, avgScore: "20,910", diff: "+2,300", color: "purple" },
-]
-
-const players = [
-  { name: "Andrew", team: "Atlas", accuracy: "92%", avgPlacement: "1.8", region: "Western Europe" },
-  { name: "Matt", team: "Vanguard", accuracy: "89%", avgPlacement: "2.1", region: "Japan" },
-  { name: "Chris", team: "Atlas", accuracy: "87%", avgPlacement: "2.4", region: "Brazil" },
-  { name: "Sam", team: "Vanguard", accuracy: "84%", avgPlacement: "2.9", region: "North America" },
-]
-
 export default function App() {
   const [rawData, setRawData] = useState([]);
 const [dailyData, setDailyData] = useState([]);
@@ -1005,88 +994,9 @@ function BottomAnalytics({ liveMatches = [], liveRegions = [] }) {
     </div>
   )
 }
-function DailyChallengeTab({ dailyData = [] }) {
-  return (
-    <>
-      <PageHeader
-        eyebrow="Daily Challenge"
-        title="Daily Challenge"
-        description="Live stats from the Daily Challenges sheet: country hits, region hits, distance, timing, date, and mode."
-      />
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <StatCard
-          label="Total Guesses"
-          value={dailyData.length}
-          sub="All daily entries"
-          accent="cyan"
-        />
-
-        <StatCard
-          label="Country Hits"
-          value={dailyData.filter((row) => row["Country Hit"] === "Yes").length}
-          sub="Exact country guesses"
-          accent="purple"
-        />
-
-        <StatCard
-          label="Region Hits"
-          value={dailyData.filter((row) => row["Region Hit"] === "Yes").length}
-          sub="Correct region guesses"
-          accent="pink"
-        />
-      </div>
-
-      <Panel>
-        <PanelHeader eyebrow="Daily Feed" title="Recent Daily Results" right="Live" />
-
-        <div className="space-y-3">
-          {dailyData.slice(0, 12).map((row, index) => (
-            <div
-              key={index}
-              className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center bg-white/5 rounded-2xl p-4 border border-white/10"
-            >
-              <div>
-                <p className="text-slate-500 text-xs">Player</p>
-                <p className="font-bold">{row.Player}</p>
-              </div>
-
-              <div>
-                <p className="text-slate-500 text-xs">Country</p>
-                <p className="font-bold">{row.Country}</p>
-              </div>
-
-              <div>
-                <p className="text-slate-500 text-xs">Region</p>
-                <p className="font-bold">{row.Region}</p>
-              </div>
-
-              <div>
-                <p className="text-slate-500 text-xs">Distance</p>
-                <p className="font-bold text-cyan-400">{row["Distance (km)"]} km</p>
-              </div>
-
-              <div>
-                <p className="text-slate-500 text-xs">Time</p>
-                <p className="font-bold">{row["Time/Guess"]}</p>
-              </div>
-
-              <div>
-                <p className="text-slate-500 text-xs">Mode</p>
-                <p className="font-bold">{row.Mode}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Panel>
-    </>
-  )
-}
 function TeamComparisonChart({ teamStats = [] }) {
 
   const chartData = teamStats.map((team) => {
-  const brand = getTeamBrand(team.name)
-
   return {
     ...team,
     fill:
@@ -1207,6 +1117,7 @@ function FilterBar({
 }
 function GeoHeatMap({ regionStats = [] }) {
   const [worldData, setWorldData] = useState(null)
+  const [hoveredRegion, setHoveredRegion] = useState(null)
 
   useEffect(() => {
     fetch(WORLD_TOPO_JSON)
@@ -1227,9 +1138,61 @@ function GeoHeatMap({ regionStats = [] }) {
     .translate([500, 300])
 
   const path = d3.geoPath(projection)
+  const mappedRegions = regionStats
+    .map((item) => {
+      const coords = GEO_COORDS[item.name]
+      if (!coords) return null
+
+      const projected = projection(coords)
+      if (!projected) return null
+
+      const tier = getDistanceTier(item.avgDistance)
+      const size = Math.min(
+        28,
+        Math.max(8, Math.sqrt(Math.max(item.avgDistance, 1)) * 1.3)
+      )
+
+      return {
+        ...item,
+        x: projected[0],
+        y: projected[1],
+        size,
+        tier,
+      }
+    })
+    .filter(Boolean)
 
   return (
     <div className="relative h-[460px] rounded-[2rem] bg-[#060b14] border border-white/10 overflow-hidden">
+      <div className="absolute left-4 top-4 z-10 flex flex-wrap gap-2">
+        {[
+          ["Strong", "#34d399", "< 50 km"],
+          ["Mixed", "#fbbf24", "50-149 km"],
+          ["Weak", "#fb7185", "150+ km"],
+        ].map(([label, color, range]) => (
+          <div key={label} className="flex items-center gap-2 rounded-xl bg-slate-950/80 border border-white/10 px-3 py-2 text-xs font-bold">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+            <span>{label}</span>
+            <span className="text-slate-500">{range}</span>
+          </div>
+        ))}
+      </div>
+
+      {hoveredRegion && (
+        <div className="absolute right-4 top-4 z-10 rounded-2xl bg-slate-950/90 border border-white/10 p-4 shadow-2xl min-w-52">
+          <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
+            Map Readout
+          </p>
+          <p className="text-xl font-black">{hoveredRegion.name}</p>
+          <p className={`font-bold ${hoveredRegion.tier.text}`}>
+            {hoveredRegion.tier.label} • {formatDistance(hoveredRegion.avgDistance)}
+          </p>
+          <p className="text-slate-500 text-xs mt-1">
+            {hoveredRegion.appearances || hoveredRegion.guesses || 0} entries
+          </p>
+        </div>
+      )}
+
       <svg viewBox="0 0 1000 520" className="w-full h-full">
         {worldData &&
           worldData.features.map((country, index) => (
@@ -1242,37 +1205,24 @@ function GeoHeatMap({ regionStats = [] }) {
             />
           ))}
 
-        {regionStats.map((item) => {
-          const coords = GEO_COORDS[item.name]
-
-          if (!coords) return null
-
-          const projected = projection(coords)
-
-          if (!projected) return null
-
-          const [x, y] = projected
-
-          const size = Math.min(
-            34,
-            Math.max(8, item.avgDistance / 18)
-          )
-
-          const fill =
-            item.avgDistance < 50
-              ? "#34d399"
-              : item.avgDistance < 150
-              ? "#fbbf24"
-              : "#fb2c5f"
-
+        {mappedRegions.map((item) => {
           return (
             <g
               key={item.name}
-              transform={`translate(${x}, ${y})`}
+              transform={`translate(${item.x}, ${item.y})`}
+              onMouseEnter={() => setHoveredRegion(item)}
+              onMouseLeave={() => setHoveredRegion(null)}
+              className="cursor-pointer"
             >
               <circle
-                r={size}
-                fill={fill}
+                r={item.size + 5}
+                fill={item.tier.fill}
+                opacity="0.14"
+              />
+
+              <circle
+                r={item.size}
+                fill={item.tier.fill}
                 stroke="rgba(255,255,255,0.8)"
                 strokeWidth="1.5"
                 opacity="0.92"
@@ -1280,7 +1230,7 @@ function GeoHeatMap({ regionStats = [] }) {
 
               <text
                 textAnchor="middle"
-                y={size + 14}
+                y={item.size + 14}
                 fill="#cbd5e1"
                 fontSize="10"
                 fontWeight="900"
