@@ -175,11 +175,17 @@ const playerStats = useMemo(() => {
         totalDistance: 0,
         kos: 0,
         regions: {},
+        recentRows: [],
       };
     }
 
     map[player].ctps += 1;
     map[player].totalDistance += distance;
+    map[player].recentRows.push({
+      region,
+      distance,
+      ko,
+    });
 
     if (region) {
       if (!map[player].regions[region]) {
@@ -200,13 +206,54 @@ const playerStats = useMemo(() => {
 
   return Object.values(map)
     .map((p) => {
-      const bestRegion =
-        Object.entries(p.regions)
-          .map(([name, data]) => ({
-            name,
-            avgDistance: data.totalDistance / data.count,
-          }))
-          .sort((a, b) => a.avgDistance - b.avgDistance)[0]?.name || "N/A";
+      const regionAverages = Object.entries(p.regions)
+        .map(([name, data]) => ({
+          name,
+          avgDistance: data.totalDistance / data.count,
+        }))
+        .sort((a, b) => a.avgDistance - b.avgDistance)
+      const recentRows = p.recentRows.slice(-20)
+      const recentRegions = {}
+
+      recentRows.forEach((row) => {
+        if (!row.region) return
+
+        if (!recentRegions[row.region]) {
+          recentRegions[row.region] = {
+            count: 0,
+            totalDistance: 0,
+          }
+        }
+
+        recentRegions[row.region].count += 1
+        recentRegions[row.region].totalDistance += row.distance
+      })
+
+      const recentRegionAverages = Object.entries(recentRegions)
+        .map(([name, data]) => ({
+          name,
+          avgDistance: data.totalDistance / data.count,
+        }))
+        .sort((a, b) => a.avgDistance - b.avgDistance)
+      const recentTotalDistance = recentRows.reduce((sum, row) => sum + row.distance, 0)
+      const last10 = recentRows.slice(-10)
+      const previous10 = recentRows.slice(-20, -10)
+      const last10Avg =
+        last10.length > 0
+          ? last10.reduce((sum, row) => sum + row.distance, 0) / last10.length
+          : null
+      const previous10Avg =
+        previous10.length > 0
+          ? previous10.reduce((sum, row) => sum + row.distance, 0) / previous10.length
+          : null
+      const trend =
+        last10Avg === null || previous10Avg === null
+          ? "Building Sample"
+          : last10Avg < previous10Avg
+          ? "Heating Up"
+          : last10Avg > previous10Avg
+          ? "Cooling Off"
+          : "Holding Steady"
 
       return {
         ...p,
@@ -217,7 +264,15 @@ const playerStats = useMemo(() => {
             : p.totalDistance / p.ctps < 150
             ? "Strong"
             : "Volatile",
-        bestRegion,
+        bestRegion: regionAverages[0]?.name || "N/A",
+        recentForm: {
+          sampleSize: recentRows.length,
+          avgDistance: recentRows.length > 0 ? recentTotalDistance / recentRows.length : 0,
+          kos: recentRows.filter((row) => row.ko && row.ko !== "-").length,
+          bestRegion: recentRegionAverages[0]?.name || "N/A",
+          weakestRegion: recentRegionAverages[recentRegionAverages.length - 1]?.name || "N/A",
+          trend,
+        },
       };
     })
     .sort((a, b) => b.ctps - a.ctps || a.avgDistance - b.avgDistance);
@@ -522,40 +577,54 @@ function StatCard({ label, value, sub, accent = "cyan" }) {
 }
 
 function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions }) {
+  const ctpLeader = playerStats[0]
+  const bestAvgPlayer = [...playerStats].sort((a, b) => a.avgDistance - b.avgDistance)[0]
+  const koLeader = [...playerStats].sort((a, b) => b.kos - a.kos || a.avgDistance - b.avgDistance)[0]
+  const bestRecentPlayer = [...playerStats]
+    .filter((player) => player.recentForm?.sampleSize > 0)
+    .sort((a, b) => a.recentForm.avgDistance - b.recentForm.avgDistance)[0]
+
   return (
     <>
       <PageHeader
         eyebrow="Competitive Analytics"
         title="League Leaders"
-        description="Season-long standings, team metrics, MVP race, match feed, and performance trends."
+        description="Real league leaderboards for CTPs, average distance, knockouts, team totals, recent results, and last-20-guess form."
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
         <StatCard
-          label="Top Team"
-          value={teamStats[0]?.name || "Loading"}
-          sub={`${teamStats[0]?.ctps || 0} CTPs`}
+          label="CTP Leader"
+          value={ctpLeader?.name || "Loading"}
+          sub={`${ctpLeader?.ctps || 0} CTPs`}
           accent="cyan"
         />
 
         <StatCard
           label="Best Avg Distance"
-          value={`${playerStats[0]?.avgDistance.toFixed(1) || "0.0"} km`}
-          sub={playerStats[0]?.name || "Loading"}
+          value={formatDistance(bestAvgPlayer?.avgDistance)}
+          sub={bestAvgPlayer?.name || "Loading"}
           accent="purple"
         />
 
         <StatCard
-          label="CTP Leader"
-          value={playerStats[0]?.name || "Loading"}
-          sub={`${playerStats[0]?.ctps || 0} CTPs`}
+          label="KO Leader"
+          value={koLeader?.name || "Loading"}
+          sub={`${koLeader?.kos || 0} KOs`}
           accent="pink"
+        />
+
+        <StatCard
+          label="Best Recent Form"
+          value={formatDistance(bestRecentPlayer?.recentForm?.avgDistance)}
+          sub={`${bestRecentPlayer?.name || "Loading"} • Last 20 guesses`}
+          accent="emerald"
         />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Panel className="xl:col-span-2">
-          <PanelHeader eyebrow="Rankings" title="League Standings" right="Updated Live" />
+          <PanelHeader eyebrow="Team Totals" title="CTPs, KOs, and Avg Distance" right="Updated Live" />
           <StandingsTable teamStats={teamStats} />
 
           <div className="mt-8 border-t border-white/10 pt-6">
@@ -565,8 +634,20 @@ function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions }) {
         </Panel>
 
         <Panel>
-          <PanelHeader eyebrow="MVP Race" title="Top Players" right="Season" />
+          <PanelHeader eyebrow="Player Leaders" title="CTP Leaderboard" right="Season" />
           <PlayerList playerStats={playerStats} />
+        </Panel>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-6">
+        <Panel className="xl:col-span-2">
+          <PanelHeader eyebrow="Recent Form" title="Last 20 Guesses" right="Lower is Better" />
+          <RecentFormTable playerStats={playerStats} />
+        </Panel>
+
+        <Panel>
+          <PanelHeader eyebrow="Precision" title="Best Avg Distance" right="Season" />
+          <AverageDistanceList playerStats={playerStats} />
         </Panel>
       </div>
 
@@ -974,6 +1055,28 @@ function PlayerProfileDetail({ player }) {
         <MiniStat label="Daily Weakest" value={daily?.weakestRegion || "N/A"} accent="text-amber-400" />
       </div>
 
+      <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+          <div>
+            <p className="text-emerald-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
+              Recent Form
+            </p>
+            <h4 className="text-2xl font-black">Last 20 Guesses</h4>
+          </div>
+
+          <p className="text-slate-500 text-sm">
+            Based on the most recent {player.recentForm?.sampleSize || 0} recorded CTP guesses.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <MiniStat label="Recent Avg" value={formatDistance(player.recentForm?.avgDistance)} accent="text-cyan-400" />
+          <MiniStat label="Trend" value={player.recentForm?.trend || "N/A"} accent="text-emerald-400" />
+          <MiniStat label="Best Recent Region" value={player.recentForm?.bestRegion || "N/A"} accent="text-purple-400" />
+          <MiniStat label="Recent KOs" value={player.recentForm?.kos || 0} accent="text-pink-400" />
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
           <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-4">
@@ -1116,9 +1219,9 @@ function StandingsTable({ teamStats = [] }) {
     <>
       <div className="grid grid-cols-4 text-slate-500 text-sm border-b border-white/10 pb-3 px-4">
         <div>Team</div>
-        <div>Wins</div>
-        <div>Avg Score</div>
-        <div>Diff</div>
+        <div>CTPs</div>
+        <div>Avg Distance</div>
+        <div>KOs</div>
       </div>
 
       <div className="space-y-3 mt-4">
@@ -1172,6 +1275,92 @@ function PlayerList({ playerStats = [] }) {
         </div>
       ))}
     </div>
+  )
+}
+
+function AverageDistanceList({ playerStats = [] }) {
+  return (
+    <div className="space-y-3">
+      {[...playerStats]
+        .sort((a, b) => a.avgDistance - b.avgDistance)
+        .slice(0, 6)
+        .map((player, index) => (
+          <div key={player.name} className="flex items-center justify-between bg-white/5 rounded-2xl p-4 border border-white/10">
+            <div>
+              <p className="font-bold">#{index + 1} {player.name}</p>
+              <p className="text-slate-500 text-sm">{player.bestRegion}</p>
+            </div>
+
+            <div className="text-right">
+              <p className="text-cyan-400 font-black">{formatDistance(player.avgDistance)}</p>
+              <p className="text-slate-500 text-xs">avg distance</p>
+            </div>
+          </div>
+        ))}
+    </div>
+  )
+}
+
+function RecentFormTable({ playerStats = [] }) {
+  const recentPlayers = [...playerStats]
+    .filter((player) => player.recentForm?.sampleSize > 0)
+    .sort((a, b) => a.recentForm.avgDistance - b.recentForm.avgDistance)
+
+  return (
+    <>
+      <p className="text-slate-400 mb-5">
+        Recent form uses each player&apos;s last 20 recorded CTP guesses, or fewer if they have not reached 20 yet.
+      </p>
+
+      <div className="hidden md:grid grid-cols-6 text-slate-500 text-sm border-b border-white/10 pb-3 px-4">
+        <div>Player</div>
+        <div>Guesses</div>
+        <div>Avg Distance</div>
+        <div>Trend</div>
+        <div>Best Region</div>
+        <div>KOs</div>
+      </div>
+
+      <div className="space-y-3 mt-4">
+        {recentPlayers.map((player, index) => (
+          <div
+            key={player.name}
+            className="grid grid-cols-1 md:grid-cols-6 gap-3 md:gap-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border border-white/10"
+          >
+            <div>
+              <p className="font-black">#{index + 1} {player.name}</p>
+              <p className="text-slate-500 text-xs md:hidden">Last {player.recentForm.sampleSize} guesses</p>
+            </div>
+
+            <div className="font-semibold">
+              Last {player.recentForm.sampleSize}
+            </div>
+
+            <div className="text-cyan-300 font-black">
+              {formatDistance(player.recentForm.avgDistance)}
+            </div>
+
+            <div className={
+              player.recentForm.trend === "Heating Up"
+                ? "text-emerald-300 font-bold"
+                : player.recentForm.trend === "Cooling Off"
+                ? "text-amber-300 font-bold"
+                : "text-slate-300 font-bold"
+            }>
+              {player.recentForm.trend}
+            </div>
+
+            <div className="font-bold">
+              {player.recentForm.bestRegion}
+            </div>
+
+            <div className="text-pink-300 font-bold">
+              {player.recentForm.kos}
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   )
 }
 
