@@ -760,34 +760,29 @@ function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions, leagueSt
           </div>
         </Panel>
 
-        <Panel>
-          <PanelHeader eyebrow="Player Leaders" title="CTP Leaderboard" right="Season" />
+        <MobileCollapsiblePanel eyebrow="Player Leaders" title="CTP Leaderboard" right="Season">
           <PlayerList playerStats={playerStats} />
-        </Panel>
+        </MobileCollapsiblePanel>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-6">
-        <Panel className="xl:col-span-2">
-          <PanelHeader eyebrow="Recent Form" title="Last 20 Guesses" right="Lower is Better" />
+        <MobileCollapsiblePanel className="xl:col-span-2" eyebrow="Recent Form" title="Last 20 Guesses" right="Lower is Better">
           <RecentFormTable playerStats={playerStats} />
-        </Panel>
+        </MobileCollapsiblePanel>
 
-        <Panel>
-          <PanelHeader eyebrow="Precision" title="Best Avg Distance" right="Season" />
+        <MobileCollapsiblePanel eyebrow="Precision" title="Best Avg Distance" right="Season">
           <AverageDistanceList playerStats={playerStats} />
-        </Panel>
+        </MobileCollapsiblePanel>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
-        <Panel>
-          <PanelHeader eyebrow="Defensive Specialists" title="Defensive Pins" right="Season" />
+        <MobileCollapsiblePanel eyebrow="Defensive Specialists" title="Defensive Pins" right="Season">
           <DefensivePinsList playerStats={playerStats} />
-        </Panel>
+        </MobileCollapsiblePanel>
 
-        <Panel>
-          <PanelHeader eyebrow="Finishers" title="KO Leaderboard" right="Season" />
+        <MobileCollapsiblePanel eyebrow="Finishers" title="KOs Leaderboard" right="Season">
           <KoLeaderboard playerStats={playerStats} />
-        </Panel>
+        </MobileCollapsiblePanel>
       </div>
 
       <BottomAnalytics liveMatches={liveMatches} liveRegions={liveRegions} leagueStats={leagueStats} />
@@ -1292,6 +1287,47 @@ function Panel({ children, className = "" }) {
     <div className={`premium-surface bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl min-w-0 ${className}`}>
       {children}
     </div>
+  )
+}
+
+function MobileCollapsiblePanel({ children, className = "", eyebrow, title, right }) {
+  return (
+    <>
+      <details className={`premium-surface group bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 shadow-2xl min-w-0 md:hidden ${className}`}>
+        <summary className="list-none cursor-pointer">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-cyan-400 uppercase tracking-[0.2em] text-[0.65rem] font-bold mb-2">
+                {eyebrow}
+              </p>
+
+              <h3 className="text-xl font-black break-words">
+                {title}
+              </h3>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-3">
+              <span className="hidden min-[420px]:inline text-slate-500 text-xs">
+                {right}
+              </span>
+
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 text-cyan-300 font-black transition-transform group-open:rotate-45">
+                +
+              </span>
+            </div>
+          </div>
+        </summary>
+
+        <div className="mt-5 border-t border-white/10 pt-5">
+          {children}
+        </div>
+      </details>
+
+      <Panel className={`hidden md:block ${className}`}>
+        <PanelHeader eyebrow={eyebrow} title={title} right={right} />
+        {children}
+      </Panel>
+    </>
   )
 }
 
