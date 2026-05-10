@@ -119,15 +119,7 @@ const filteredDailyData = useMemo(() => {
 const playerStats = useMemo(() => {
   const map = {};
 
-  filteredRawData.forEach((row) => {
-    const player = row["CTP Player"];
-    const team = normalizeTeamName(row["CTP Team"]);
-    const region = row["Region"];
-    const distance = parseFloat(row["CTP Distance (km)"]) || 0;
-    const ko = row["Knockout Punch"];
-
-    if (!player) return;
-
+  function ensurePlayer(player, team) {
     if (!map[player]) {
       map[player] = {
         name: player,
@@ -135,33 +127,62 @@ const playerStats = useMemo(() => {
         ctps: 0,
         totalDistance: 0,
         kos: 0,
+        defensivePins: 0,
+        totalDefensiveDistance: 0,
         regions: {},
         recentRows: [],
       };
     }
 
-    map[player].ctps += 1;
-    map[player].totalDistance += distance;
-    map[player].recentRows.push({
+    if (!map[player].team && team) {
+      map[player].team = team
+    }
+
+    return map[player]
+  }
+
+  filteredRawData.forEach((row) => {
+    const player = row["CTP Player"];
+    const team = normalizeTeamName(row["CTP Team"]);
+    const region = row["Region"];
+    const distance = parseFloat(row["CTP Distance (km)"]) || 0;
+    const ko = row["Knockout Punch"];
+    const defensivePlayer = row["2nd CTP"];
+    const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
+
+    if (defensivePlayer) {
+      const defender = ensurePlayer(defensivePlayer)
+
+      defender.defensivePins += 1
+      defender.totalDefensiveDistance += defensiveDistance
+    }
+
+    if (!player) return;
+
+    const playerRecord = ensurePlayer(player, team)
+
+    playerRecord.ctps += 1;
+    playerRecord.totalDistance += distance;
+    playerRecord.recentRows.push({
       region,
       distance,
       ko,
     });
 
     if (region) {
-      if (!map[player].regions[region]) {
-        map[player].regions[region] = {
+      if (!playerRecord.regions[region]) {
+        playerRecord.regions[region] = {
           count: 0,
           totalDistance: 0,
         };
       }
 
-      map[player].regions[region].count += 1;
-      map[player].regions[region].totalDistance += distance;
+      playerRecord.regions[region].count += 1;
+      playerRecord.regions[region].totalDistance += distance;
     }
 
     if (ko && ko !== "-") {
-      map[player].kos += 1;
+      playerRecord.kos += 1;
     }
   });
 
@@ -218,11 +239,13 @@ const playerStats = useMemo(() => {
 
       return {
         ...p,
-        avgDistance: p.totalDistance / p.ctps,
+        avgDistance: p.ctps > 0 ? p.totalDistance / p.ctps : 0,
+        avgDefensiveDistance:
+          p.defensivePins > 0 ? p.totalDefensiveDistance / p.defensivePins : 0,
         consistency:
-          p.totalDistance / p.ctps < 50
+          p.ctps > 0 && p.totalDistance / p.ctps < 50
             ? "Elite"
-            : p.totalDistance / p.ctps < 150
+            : p.ctps > 0 && p.totalDistance / p.ctps < 150
             ? "Strong"
             : "Volatile",
         bestRegion: regionAverages[0]?.name || "N/A",
@@ -241,11 +264,24 @@ const playerStats = useMemo(() => {
 
 const teamStats = useMemo(() => {
   const map = {};
+  const playerTeams = {};
+
+  filteredRawData.forEach((row) => {
+    const player = row["CTP Player"];
+    const team = normalizeTeamName(row["CTP Team"]);
+
+    if (player && team) {
+      playerTeams[player] = team
+    }
+  })
 
   filteredRawData.forEach((row) => {
     const team = normalizeTeamName(row["CTP Team"]);
     const distance = parseFloat(row["CTP Distance (km)"]) || 0;
     const ko = row["Knockout Punch"];
+    const defensivePlayer = row["2nd CTP"];
+    const defensiveTeam = playerTeams[defensivePlayer];
+    const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
 
     if (!team) return;
 
@@ -255,6 +291,8 @@ const teamStats = useMemo(() => {
         ctps: 0,
         totalDistance: 0,
         kos: 0,
+        defensivePins: 0,
+        totalDefensiveDistance: 0,
       };
     }
 
@@ -264,12 +302,30 @@ const teamStats = useMemo(() => {
     if (ko && ko !== "-") {
       map[team].kos += 1;
     }
+
+    if (defensiveTeam) {
+      if (!map[defensiveTeam]) {
+        map[defensiveTeam] = {
+          name: defensiveTeam,
+          ctps: 0,
+          totalDistance: 0,
+          kos: 0,
+          defensivePins: 0,
+          totalDefensiveDistance: 0,
+        }
+      }
+
+      map[defensiveTeam].defensivePins += 1
+      map[defensiveTeam].totalDefensiveDistance += defensiveDistance
+    }
   });
 
   return Object.values(map)
     .map((team) => ({
       ...team,
-      avgDistance: team.totalDistance / team.ctps,
+      avgDistance: team.ctps > 0 ? team.totalDistance / team.ctps : 0,
+      avgDefensiveDistance:
+        team.defensivePins > 0 ? team.totalDefensiveDistance / team.defensivePins : 0,
     }))
     .sort((a, b) => b.ctps - a.ctps);
 }, [filteredRawData]);
@@ -281,6 +337,8 @@ const regionStats = useMemo(() => {
     const region = row["Region"];
     const player = row["CTP Player"];
     const distance = parseFloat(row["CTP Distance (km)"]) || 0;
+    const defensivePlayer = row["2nd CTP"];
+    const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
 
     if (!region || !player) return;
 
@@ -289,12 +347,30 @@ const regionStats = useMemo(() => {
         name: region,
         appearances: 0,
         totalDistance: 0,
+        defensivePins: 0,
+        totalDefensiveDistance: 0,
         players: {},
+        defensivePlayers: {},
       };
     }
 
     map[region].appearances += 1;
     map[region].totalDistance += distance;
+
+    if (defensivePlayer) {
+      map[region].defensivePins += 1
+      map[region].totalDefensiveDistance += defensiveDistance
+
+      if (!map[region].defensivePlayers[defensivePlayer]) {
+        map[region].defensivePlayers[defensivePlayer] = {
+          count: 0,
+          totalDistance: 0,
+        }
+      }
+
+      map[region].defensivePlayers[defensivePlayer].count += 1
+      map[region].defensivePlayers[defensivePlayer].totalDistance += defensiveDistance
+    }
 
     if (!map[region].players[player]) {
       map[region].players[player] = {
@@ -316,11 +392,21 @@ const regionStats = useMemo(() => {
             avgDistance: data.totalDistance / data.count,
           }))
           .sort((a, b) => a.avgDistance - b.avgDistance)[0];
+      const bestDefensivePlayer =
+        Object.entries(region.defensivePlayers)
+          .map(([name, data]) => ({
+            name,
+            avgDistance: data.totalDistance / data.count,
+          }))
+          .sort((a, b) => a.avgDistance - b.avgDistance)[0];
 
       return {
         ...region,
         avgDistance: region.totalDistance / region.appearances,
+        avgDefensiveDistance:
+          region.defensivePins > 0 ? region.totalDefensiveDistance / region.defensivePins : 0,
         bestPlayer: bestPlayer?.name || "N/A",
+        bestDefensivePlayer: bestDefensivePlayer?.name || "N/A",
       };
     })
     .sort((a, b) => a.avgDistance - b.avgDistance);
@@ -334,6 +420,8 @@ const countryStats = useMemo(() => {
     const region = row["Region"];
     const player = row["CTP Player"];
     const distance = parseFloat(row["CTP Distance (km)"]) || 0;
+    const defensivePlayer = row["2nd CTP"];
+    const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
 
     if (!country || !player) return;
 
@@ -343,12 +431,30 @@ const countryStats = useMemo(() => {
         region,
         appearances: 0,
         totalDistance: 0,
+        defensivePins: 0,
+        totalDefensiveDistance: 0,
         players: {},
+        defensivePlayers: {},
       };
     }
 
     map[country].appearances += 1;
     map[country].totalDistance += distance;
+
+    if (defensivePlayer) {
+      map[country].defensivePins += 1
+      map[country].totalDefensiveDistance += defensiveDistance
+
+      if (!map[country].defensivePlayers[defensivePlayer]) {
+        map[country].defensivePlayers[defensivePlayer] = {
+          count: 0,
+          totalDistance: 0,
+        }
+      }
+
+      map[country].defensivePlayers[defensivePlayer].count += 1
+      map[country].defensivePlayers[defensivePlayer].totalDistance += defensiveDistance
+    }
 
     if (!map[country].players[player]) {
       map[country].players[player] = {
@@ -370,11 +476,21 @@ const countryStats = useMemo(() => {
             avgDistance: data.totalDistance / data.count,
           }))
           .sort((a, b) => a.avgDistance - b.avgDistance)[0];
+      const bestDefensivePlayer =
+        Object.entries(country.defensivePlayers)
+          .map(([name, data]) => ({
+            name,
+            avgDistance: data.totalDistance / data.count,
+          }))
+          .sort((a, b) => a.avgDistance - b.avgDistance)[0];
 
       return {
         ...country,
         avgDistance: country.totalDistance / country.appearances,
+        avgDefensiveDistance:
+          country.defensivePins > 0 ? country.totalDefensiveDistance / country.defensivePins : 0,
         bestPlayer: bestPlayer?.name || "N/A",
+        bestDefensivePlayer: bestDefensivePlayer?.name || "N/A",
       };
     })
     .sort((a, b) => a.avgDistance - b.avgDistance);
@@ -403,6 +519,7 @@ const liveRegions = useMemo(() => {
 const leagueStats = useMemo(() => {
   const playerCount = playerStats.length
   const totalGuesses = filteredRawData.filter((row) => row["CTP Player"]).length
+  const defensivePins = filteredRawData.filter((row) => row["2nd CTP"]).length
   const totalDistance = filteredRawData.reduce(
     (sum, row) => sum + (parseFloat(row["CTP Distance (km)"]) || 0),
     0
@@ -411,6 +528,7 @@ const leagueStats = useMemo(() => {
 
   return {
     totalGuesses,
+    defensivePins,
     playerCount,
     avgDistance: totalGuesses > 0 ? totalDistance / totalGuesses : 0,
     bestTeam: bestTeam?.name || "N/A",
@@ -536,7 +654,7 @@ function StatCard({ label, value, sub, accent = "cyan" }) {
   }
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl sm:rounded-3xl border ${colors[accent]} bg-white/5 backdrop-blur-xl p-4 sm:p-6 shadow-2xl min-w-0`}>
+    <div className={`premium-surface interactive-card relative overflow-hidden rounded-2xl sm:rounded-3xl border ${colors[accent]} bg-white/5 backdrop-blur-xl p-4 sm:p-6 shadow-2xl min-w-0`}>
       <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl ${colors[accent].split(" ")[2]}`} />
 
       <p className="text-slate-400 text-xs sm:text-sm uppercase tracking-wider">
@@ -558,6 +676,9 @@ function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions, leagueSt
   const ctpLeader = playerStats[0]
   const bestAvgPlayer = [...playerStats].sort((a, b) => a.avgDistance - b.avgDistance)[0]
   const koLeader = [...playerStats].sort((a, b) => b.kos - a.kos || a.avgDistance - b.avgDistance)[0]
+  const defensiveLeader = [...playerStats].sort(
+    (a, b) => b.defensivePins - a.defensivePins || a.avgDefensiveDistance - b.avgDefensiveDistance
+  )[0]
   const bestRecentPlayer = [...playerStats]
     .filter((player) => player.recentForm?.sampleSize > 0)
     .sort((a, b) => a.recentForm.avgDistance - b.recentForm.avgDistance)[0]
@@ -570,7 +691,7 @@ function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions, leagueSt
         description="Real league leaderboards for CTPs, average distance, knockouts, team totals, recent results, and last-20-guess form."
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6 mb-8">
         <StatCard
           label="CTP Leader"
           value={ctpLeader?.name || "Loading"}
@@ -593,6 +714,13 @@ function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions, leagueSt
         />
 
         <StatCard
+          label="Defensive Pins"
+          value={defensiveLeader?.name || "Loading"}
+          sub={`${defensiveLeader?.defensivePins || 0} pins`}
+          accent="cyan"
+        />
+
+        <StatCard
           label="Best Recent Form"
           value={formatDistance(bestRecentPlayer?.recentForm?.avgDistance)}
           sub={`${bestRecentPlayer?.name || "Loading"} • Last 20 guesses`}
@@ -602,7 +730,7 @@ function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions, leagueSt
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Panel className="xl:col-span-2">
-          <PanelHeader eyebrow="Team Totals" title="CTPs, KOs, and Avg Distance" right="Updated Live" />
+          <PanelHeader eyebrow="Team Totals" title="CTPs, Defensive Pins, and KOs" right="Updated Live" />
           <StandingsTable teamStats={teamStats} />
 
           <div className="mt-8 border-t border-white/10 pt-6">
@@ -739,11 +867,12 @@ function RegionsTab({ regionStats, countryStats }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {activeGeoStats.map((region) => (
-          <div
+          <details
             key={region.name}
-            className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl hover:bg-white/10 transition-all"
+            className="interactive-card group bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl hover:bg-white/10 transition-all"
           >
-            <div className="flex items-start justify-between gap-4 mb-5 sm:mb-6">
+            <summary className="list-none cursor-pointer">
+            <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
                   {geoLabel} Intelligence
@@ -764,11 +893,18 @@ function RegionsTab({ regionStats, countryStats }) {
                 </p>
               </div>
             </div>
+            </summary>
 
-            <div className="space-y-4">
+            <div className="space-y-4 mt-5 sm:mt-6">
               <MiniStat
                 label="Top Specialist"
                 value={region.bestPlayer}
+                accent="text-cyan-400"
+              />
+
+              <MiniStat
+                label="Defensive Pins"
+                value={region.defensivePins || 0}
                 accent="text-cyan-400"
               />
 
@@ -795,7 +931,7 @@ function RegionsTab({ regionStats, countryStats }) {
                 }
               />
             </div>
-          </div>
+          </details>
         ))}
       </div>
     </>
@@ -834,7 +970,7 @@ function PlayersTab({ playerStats = [], dailyData = [] }) {
         <StatCard
           label="Most CTPs"
           value={playerProfiles[0]?.name || "Loading"}
-          sub={`${playerProfiles[0]?.ctps || 0} CTPs`}
+          sub={`${playerProfiles[0]?.ctps || 0} CTPs • ${playerProfiles[0]?.defensivePins || 0} Defensive Pins`}
           accent="cyan"
         />
 
@@ -879,32 +1015,42 @@ function PlayersTab({ playerStats = [], dailyData = [] }) {
           const isSelected = selectedPlayer?.name === player.name
 
           return (
-          <button
+          <details
             key={player.name}
-            onClick={() => setSelectedPlayerName(player.name)}
-            className={`relative overflow-hidden text-left bg-white/5 backdrop-blur-xl border rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl transition-all hover:scale-[1.02] ${brand.border} ${brand.glow} ${
+            className={`interactive-card group relative overflow-hidden text-left bg-white/5 backdrop-blur-xl border rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl transition-all ${brand.border} ${brand.glow} ${
               isSelected ? "ring-2 ring-cyan-300/70" : ""
             }`}
 >
             <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 blur-3xl" />
 
-            <div className="relative z-10 flex items-start justify-between gap-3 sm:gap-4 mb-5">
-              <PlayerAvatar playerName={player.name} className="h-20 w-20 sm:h-24 sm:w-24" />
+            <summary
+              onClick={() => setSelectedPlayerName(player.name)}
+              className="relative z-10 list-none cursor-pointer"
+            >
+              <div className="flex items-start justify-between gap-3 sm:gap-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <PlayerAvatar playerName={player.name} className="h-16 w-16 sm:h-20 sm:w-20" />
 
-              <div className="flex items-center gap-2 min-w-0">
-                <TeamLogo teamName={player.team} className="h-8 w-8 sm:h-9 sm:w-9" />
-                <span className={`text-[0.65rem] sm:text-xs font-black uppercase tracking-[0.16em] sm:tracking-[0.2em] truncate ${brand.accent}`}>
-                  {player.team}
-                </span>
+                  <div className="min-w-0">
+                    <h3 className="text-xl sm:text-2xl font-black truncate">{player.name}</h3>
+                    <p className="text-slate-400 text-sm">
+                      {player.ctps} CTPs • {player.defensivePins} Defensive Pins
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 min-w-0">
+                  <TeamLogo teamName={player.team} className="h-8 w-8 sm:h-9 sm:w-9" />
+                  <span className={`hidden sm:inline text-xs font-black uppercase tracking-[0.2em] truncate ${brand.accent}`}>
+                    {player.team}
+                  </span>
+                </div>
               </div>
-            </div>
+            </summary>
 
-            <h3 className="text-2xl sm:text-3xl font-black mb-5 sm:mb-6 break-words">
-              {player.name}
-            </h3>
-
-            <div className="space-y-3 sm:space-y-4">
+            <div className="mt-5 space-y-3 sm:space-y-4">
               <MiniStat label="CTPs" value={player.ctps} accent="text-cyan-400" />
+              <MiniStat label="Defensive Pins" value={player.defensivePins} accent="text-cyan-400" />
               <MiniStat label="Avg Distance" value={formatDistance(player.avgDistance)} />
               <MiniStat label="Best Region" value={player.bestRegion} accent="text-purple-400" />
               <MiniStat label="Daily Hit Rate" value={formatPercent(player.daily?.countryHitRate)} accent="text-emerald-400" />
@@ -915,7 +1061,7 @@ function PlayersTab({ playerStats = [], dailyData = [] }) {
               />
               <MiniStat label="KOs" value={player.kos} accent="text-pink-400" />
             </div>
-          </button>
+          </details>
           )
         })}
       </div>
@@ -970,23 +1116,23 @@ function PlayerProfileDetail({ player }) {
 
               <h3 className="text-3xl sm:text-5xl font-black break-words">{player.name}</h3>
               <p className="text-slate-400 mt-3 text-sm sm:text-base">
-                {player.consistency} season profile with {player.ctps} CTPs and {player.kos} KOs.
+                {player.consistency} season profile with {player.ctps} CTPs, {player.defensivePins} Defensive Pins, and {player.kos} KOs.
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 w-full lg:w-auto lg:min-w-64">
             <MiniStat label="Season Avg" value={formatDistance(player.avgDistance)} accent="text-cyan-400" />
-            <MiniStat label="Daily Avg" value={formatDistance(daily?.avgDistance)} accent="text-emerald-400" />
+            <MiniStat label="Defensive Pins" value={player.defensivePins} accent="text-cyan-400" />
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <MiniStat label="Daily Avg" value={formatDistance(daily?.avgDistance)} accent="text-emerald-400" />
         <MiniStat label="Country Hit" value={formatPercent(daily?.countryHitRate)} accent="text-purple-400" />
         <MiniStat label="Region Hit" value={formatPercent(daily?.regionHitRate)} accent="text-pink-400" />
         <MiniStat label="Daily Strongest" value={daily?.strongestRegion || "N/A"} accent="text-emerald-400" />
-        <MiniStat label="Daily Weakest" value={daily?.weakestRegion || "N/A"} accent="text-amber-400" />
       </div>
 
       <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
@@ -1056,6 +1202,7 @@ function PlayerHeadToHead({
   const metrics = [
     { label: "Season Avg", a: selectedPlayer?.avgDistance, b: comparisonPlayer?.avgDistance, format: formatDistance, lowerWins: true },
     { label: "CTPs", a: selectedPlayer?.ctps, b: comparisonPlayer?.ctps, format: (value) => value || 0 },
+    { label: "Defensive Pins", a: selectedPlayer?.defensivePins, b: comparisonPlayer?.defensivePins, format: (value) => value || 0 },
     { label: "KOs", a: selectedPlayer?.kos, b: comparisonPlayer?.kos, format: (value) => value || 0 },
     { label: "Daily Avg", a: selectedPlayer?.daily?.avgDistance, b: comparisonPlayer?.daily?.avgDistance, format: formatDistance, lowerWins: true },
     { label: "Country Hit", a: selectedPlayer?.daily?.countryHitRate, b: comparisonPlayer?.daily?.countryHitRate, format: formatPercent },
@@ -1122,7 +1269,7 @@ function PlayerHeadToHead({
 
 function Panel({ children, className = "" }) {
   return (
-    <div className={`bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl min-w-0 ${className}`}>
+    <div className={`premium-surface bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl min-w-0 ${className}`}>
       {children}
     </div>
   )
@@ -1151,9 +1298,10 @@ function PanelHeader({ eyebrow, title, right }) {
 function StandingsTable({ teamStats = [] }) {
   return (
     <>
-      <div className="hidden sm:grid grid-cols-4 text-slate-500 text-sm border-b border-white/10 pb-3 px-4">
+      <div className="hidden sm:grid grid-cols-5 text-slate-500 text-sm border-b border-white/10 pb-3 px-4">
         <div>Team</div>
         <div>CTPs</div>
+        <div>Defensive Pins</div>
         <div>Avg Distance</div>
         <div>KOs</div>
       </div>
@@ -1165,7 +1313,7 @@ function StandingsTable({ teamStats = [] }) {
   return (
     <div
       key={team.name}
-      className={`grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border ${brand.border} ${brand.glow}`}
+      className={`interactive-card grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border ${brand.border} ${brand.glow}`}
     >
       <div className="font-bold col-span-2 sm:col-span-1">
         <span className={`flex items-center gap-3 ${brand.accent}`}>
@@ -1177,6 +1325,11 @@ function StandingsTable({ teamStats = [] }) {
       <div className="font-semibold">
         <span className="sm:hidden text-slate-500 text-xs block">CTPs</span>
         {team.ctps}
+      </div>
+
+      <div className="font-semibold text-cyan-300">
+        <span className="sm:hidden text-slate-500 text-xs block">Defensive Pins</span>
+        {team.defensivePins}
       </div>
 
       <div>
@@ -1213,6 +1366,8 @@ function PlayerList({ playerStats = [] }) {
           <div className="text-right">
             <p className="text-cyan-400 font-bold">{player.ctps}</p>
             <p className="text-slate-500 text-xs">CTPs</p>
+            <p className="text-cyan-300 font-bold mt-1">{player.defensivePins}</p>
+            <p className="text-slate-500 text-xs">Defensive Pins</p>
           </div>
         </div>
       ))}
@@ -1283,10 +1438,12 @@ function RecentFormTable({ playerStats = [] }) {
             </div>
 
             <div className="font-semibold">
+              <span className="md:hidden block text-slate-500 text-xs">Guesses</span>
               Last {player.recentForm.sampleSize}
             </div>
 
             <div className="text-cyan-300 font-black">
+              <span className="md:hidden block text-slate-500 text-xs">Avg Distance</span>
               {formatDistance(player.recentForm.avgDistance)}
             </div>
 
@@ -1297,14 +1454,17 @@ function RecentFormTable({ playerStats = [] }) {
                 ? "text-amber-300 font-bold"
                 : "text-slate-300 font-bold"
             }>
+              <span className="md:hidden block text-slate-500 text-xs">Trend</span>
               {player.recentForm.trend}
             </div>
 
             <div className="font-bold">
+              <span className="md:hidden block text-slate-500 text-xs">Best Region</span>
               {player.recentForm.bestRegion}
             </div>
 
             <div className="text-pink-300 font-bold">
+              <span className="md:hidden block text-slate-500 text-xs">KOs</span>
               {player.recentForm.kos}
             </div>
           </div>
@@ -1316,7 +1476,7 @@ function RecentFormTable({ playerStats = [] }) {
 
 function MiniStat({ label, value, accent = "" }) {
   return (
-    <div className="bg-white/5 rounded-2xl p-3 sm:p-4 border border-white/10 min-w-0">
+    <div className="premium-surface bg-white/5 rounded-2xl p-3 sm:p-4 border border-white/10 min-w-0">
       <p className="text-slate-500 text-xs sm:text-sm mb-2">
         {label}
       </p>
@@ -1374,6 +1534,7 @@ function BottomAnalytics({ liveMatches = [], liveRegions = [], leagueStats }) {
 
         <div className="grid grid-cols-2 gap-4">
           <MiniStat label="CTP Entries" value={leagueStats?.totalGuesses || 0} />
+          <MiniStat label="Defensive Pins" value={leagueStats?.defensivePins || 0} accent="text-cyan-400" />
           <MiniStat label="Avg Distance" value={formatDistance(leagueStats?.avgDistance)} accent="text-cyan-400" />
           <MiniStat label="Top Team" value={leagueStats?.bestTeam || "N/A"} />
           <MiniStat label="Players" value={leagueStats?.playerCount || 0} />

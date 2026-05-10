@@ -38,7 +38,7 @@ export function StatCard({ label, value, sub, accent = "cyan" }) {
   }
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl sm:rounded-3xl border ${colors[accent]} bg-white/5 backdrop-blur-xl p-4 sm:p-6 shadow-2xl min-w-0`}>
+    <div className={`premium-surface interactive-card relative overflow-hidden rounded-2xl sm:rounded-3xl border ${colors[accent]} bg-white/5 backdrop-blur-xl p-4 sm:p-6 shadow-2xl min-w-0`}>
       <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl ${colors[accent].split(" ")[2]}`} />
 
       <p className="text-slate-400 text-xs sm:text-sm uppercase tracking-wider">
@@ -58,7 +58,7 @@ export function StatCard({ label, value, sub, accent = "cyan" }) {
 
 export function Panel({ children, className = "" }) {
   return (
-    <div className={`bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl min-w-0 ${className}`}>
+    <div className={`premium-surface bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl min-w-0 ${className}`}>
       {children}
     </div>
   )
@@ -86,7 +86,7 @@ export function PanelHeader({ eyebrow, title, right }) {
 
 export function MiniStat({ label, value, accent = "" }) {
   return (
-    <div className="bg-white/5 rounded-2xl p-3 sm:p-4 border border-white/10 min-w-0">
+    <div className="premium-surface bg-white/5 rounded-2xl p-3 sm:p-4 border border-white/10 min-w-0">
       <p className="text-slate-500 text-xs sm:text-sm mb-2">
         {label}
       </p>

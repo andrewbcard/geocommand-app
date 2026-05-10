@@ -273,10 +273,22 @@ function DailyPlayerTable({ playerStats = [] }) {
                 <p className="text-slate-500 text-xs md:hidden">{player.guesses} guesses</p>
               </div>
             </div>
-            <div className="font-semibold">{player.guesses}</div>
-            <div className="text-purple-300 font-bold">{formatPercent(player.countryHitRate)}</div>
-            <div className="text-pink-300 font-bold">{formatPercent(player.regionHitRate)}</div>
-            <div className="text-cyan-300 font-black">{formatDistance(player.avgDistance)}</div>
+            <div className="font-semibold">
+              <span className="md:hidden block text-slate-500 text-xs">Guesses</span>
+              {player.guesses}
+            </div>
+            <div className="text-purple-300 font-bold">
+              <span className="md:hidden block text-slate-500 text-xs">Country Hit</span>
+              {formatPercent(player.countryHitRate)}
+            </div>
+            <div className="text-pink-300 font-bold">
+              <span className="md:hidden block text-slate-500 text-xs">Region Hit</span>
+              {formatPercent(player.regionHitRate)}
+            </div>
+            <div className="text-cyan-300 font-black">
+              <span className="md:hidden block text-slate-500 text-xs">Avg Distance</span>
+              {formatDistance(player.avgDistance)}
+            </div>
           </div>
         ))}
       </div>

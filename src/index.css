@@ -12,3 +12,59 @@ body,
 body {
   font-family: Inter, sans-serif;
 }
+
+@keyframes surface-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.premium-surface {
+  animation: surface-in 420ms ease both;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.interactive-card {
+  will-change: transform;
+}
+
+@media (hover: hover) {
+  .interactive-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 22px 50px rgba(6, 182, 212, 0.08);
+  }
+}
+
+.interactive-card:active {
+  transform: translateY(0) scale(0.99);
+}
+
+details > summary {
+  outline: none;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+
+details[open] {
+  border-color: rgba(34, 211, 238, 0.28);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .premium-surface,
+  .interactive-card {
+    animation: none;
+    transition: none;
+  }
+}
