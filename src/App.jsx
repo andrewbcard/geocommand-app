@@ -76,10 +76,20 @@ const TEAM_BRANDING = {
     accent: "text-purple-300",
   },
 }
+function normalizeTeamName(teamName) {
+  const normalized = String(teamName || "").trim().replace(/\s+/g, " ")
+  const lower = normalized.toLowerCase()
+
+  if (lower.includes("bontswana")) return "Bontswana"
+  if (lower.includes("lats")) return "Lats"
+
+  return normalized
+}
+
 function getTeamBrand(teamName) {
   if (!teamName) return TEAM_BRANDING.Lats
 
-  const normalized = teamName.toLowerCase()
+  const normalized = normalizeTeamName(teamName).toLowerCase()
 
   if (normalized.includes("bontswana")) {
     return TEAM_BRANDING.Bontswana
@@ -135,7 +145,7 @@ const filteredRawData = useMemo(() => {
   return rawData.filter((row) => {
     const teamMatches =
       selectedTeam === "All" ||
-      row["CTP Team"] === selectedTeam
+      normalizeTeamName(row["CTP Team"]) === selectedTeam
 
     const mode = row["Mode"]
 
@@ -159,7 +169,7 @@ const playerStats = useMemo(() => {
 
   filteredRawData.forEach((row) => {
     const player = row["CTP Player"];
-    const team = row["CTP Team"];
+    const team = normalizeTeamName(row["CTP Team"]);
     const region = row["Region"];
     const distance = parseFloat(row["CTP Distance (km)"]) || 0;
     const ko = row["Knockout Punch"];
@@ -281,7 +291,7 @@ const teamStats = useMemo(() => {
   const map = {};
 
   filteredRawData.forEach((row) => {
-    const team = row["CTP Team"];
+    const team = normalizeTeamName(row["CTP Team"]);
     const distance = parseFloat(row["CTP Distance (km)"]) || 0;
     const ko = row["Knockout Punch"];
 
@@ -423,7 +433,7 @@ const liveMatches = useMemo(() => {
     .slice(-12)
     .reverse()
     .map((row) => ({
-      winner: row["CTP Team"] || "Unknown",
+      winner: normalizeTeamName(row["CTP Team"]) || "Unknown",
       loser: "Field",
       score: `${row["CTP Player"] || "Unknown"} • ${row["CTP Distance (km)"] || "0"} km`,
       status: row["Knockout Punch"] && row["Knockout Punch"] !== "-" ? "KO" : "CTP",
@@ -437,6 +447,24 @@ const liveRegions = useMemo(() => {
     color: ["bg-cyan-400", "bg-purple-400", "bg-pink-400", "bg-emerald-400"][index % 4],
   }));
 }, [regionStats]);
+
+const leagueStats = useMemo(() => {
+  const playerCount = playerStats.length
+  const totalGuesses = filteredRawData.filter((row) => row["CTP Player"]).length
+  const totalDistance = filteredRawData.reduce(
+    (sum, row) => sum + (parseFloat(row["CTP Distance (km)"]) || 0),
+    0
+  )
+  const bestTeam = [...teamStats].sort((a, b) => b.ctps - a.ctps || a.avgDistance - b.avgDistance)[0]
+
+  return {
+    totalGuesses,
+    playerCount,
+    avgDistance: totalGuesses > 0 ? totalDistance / totalGuesses : 0,
+    bestTeam: bestTeam?.name || "N/A",
+  }
+}, [filteredRawData, playerStats, teamStats])
+
   return (
     <div className="min-h-screen bg-[#070b14] text-white overflow-x-hidden">
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_top_right,#1d4ed830,transparent_35%),radial-gradient(circle_at_bottom_left,#06b6d430,transparent_35%)] pointer-events-none" />
@@ -463,8 +491,7 @@ const liveRegions = useMemo(() => {
     Players Loaded: {playerStats.length}
   </p>
 </div>
-        {activeTab === "feed" && <FeedTab liveMatches={liveMatches} />}
-        {activeTab === "leaders" && <LeadersTab playerStats={playerStats} teamStats={teamStats} liveMatches={liveMatches} liveRegions={liveRegions} />}
+        {activeTab === "leaders" && <LeadersTab playerStats={playerStats} teamStats={teamStats} liveMatches={liveMatches} liveRegions={liveRegions} leagueStats={leagueStats} />}
         {activeTab === "regions" && (
           <RegionsTab
             regionStats={regionStats}
@@ -480,7 +507,6 @@ const liveRegions = useMemo(() => {
 
 function TopNav({ activeTab, setActiveTab }) {
     const tabs = [
-      { id: "feed", label: "Feed" },
       { id: "leaders", label: "Leaders" },
       { id: "regions", label: "Regions" },
       { id: "players", label: "Players" },
@@ -576,7 +602,7 @@ function StatCard({ label, value, sub, accent = "cyan" }) {
   )
 }
 
-function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions }) {
+function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions, leagueStats }) {
   const ctpLeader = playerStats[0]
   const bestAvgPlayer = [...playerStats].sort((a, b) => a.avgDistance - b.avgDistance)[0]
   const koLeader = [...playerStats].sort((a, b) => b.kos - a.kos || a.avgDistance - b.avgDistance)[0]
@@ -651,63 +677,7 @@ function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions }) {
         </Panel>
       </div>
 
-      <BottomAnalytics liveMatches={liveMatches} liveRegions={liveRegions} />
-    </>
-  )
-}
-
-function FeedTab({ liveMatches = [] }) {
-  return (
-    <>
-      <PageHeader
-        eyebrow="Live Match Center"
-        title="League Feed"
-        description="A running log of match results, player performances, and weekly league activity."
-      />
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <Panel className="xl:col-span-2">
-          <PanelHeader eyebrow="Match Feed" title="Recent Results" right="Live" />
-
-          <div className="space-y-4">
-            {liveMatches.map((match, index) => (
-              <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center bg-white/5 rounded-2xl p-5 border border-white/10">
-                <div>
-                  <p className="text-slate-500 text-sm">Winner</p>
-                  <p className="text-xl font-black">{match.winner}</p>
-                </div>
-
-                <div>
-                  <p className="text-slate-500 text-sm">Scoreline</p>
-                  <p className="font-bold">{match.score}</p>
-                </div>
-
-                <div>
-                  <p className="text-slate-500 text-sm">Opponent</p>
-                  <p className="font-bold">{match.loser}</p>
-                </div>
-
-                <div className="md:text-right">
-                  <span className="inline-flex rounded-xl bg-emerald-400/10 border border-emerald-400/20 text-emerald-400 px-4 py-2 font-black text-sm">
-                    {match.status}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Panel>
-
-        <Panel>
-          <PanelHeader eyebrow="Activity" title="League Pulse" right="Week 7" />
-
-          <div className="grid grid-cols-2 gap-4">
-            <MiniStat label="Matches" value="24" />
-            <MiniStat label="Players" value="12" />
-            <MiniStat label="Avg Score" value="21.1K" accent="text-cyan-400" />
-            <MiniStat label="Hot Team" value="Atlas" />
-          </div>
-        </Panel>
-      </div>
+      <BottomAnalytics liveMatches={liveMatches} liveRegions={liveRegions} leagueStats={leagueStats} />
     </>
   )
 }
@@ -1406,7 +1376,7 @@ function MiniStat({ label, value, accent = "" }) {
   )
 }
 
-function BottomAnalytics({ liveMatches = [], liveRegions = [] }) {
+function BottomAnalytics({ liveMatches = [], liveRegions = [], leagueStats }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
       <Panel>
@@ -1451,10 +1421,10 @@ function BottomAnalytics({ liveMatches = [], liveRegions = [] }) {
         <PanelHeader eyebrow="Activity" title="League Stats" right="Season" />
 
         <div className="grid grid-cols-2 gap-4">
-          <MiniStat label="Matches" value="84" />
-          <MiniStat label="Avg Accuracy" value="87%" accent="text-cyan-400" />
-          <MiniStat label="Best Team" value="Atlas" />
-          <MiniStat label="Players" value="12" />
+          <MiniStat label="CTP Entries" value={leagueStats?.totalGuesses || 0} />
+          <MiniStat label="Avg Distance" value={formatDistance(leagueStats?.avgDistance)} accent="text-cyan-400" />
+          <MiniStat label="Top Team" value={leagueStats?.bestTeam || "N/A"} />
+          <MiniStat label="Players" value={leagueStats?.playerCount || 0} />
         </div>
       </Panel>
     </div>
