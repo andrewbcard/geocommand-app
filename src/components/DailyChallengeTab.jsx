@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import GeoHeatMap from "./GeoHeatMap.jsx"
 import { MiniStat, PageHeader, Panel, PanelHeader, StatCard } from "./dashboardPrimitives.jsx"
 import { PlayerAvatar } from "./LeagueIdentity.jsx"
 import {
@@ -14,6 +15,7 @@ export default function DailyChallengeTab({ dailyData = [] }) {
   const regionStats = useMemo(() => buildDailyRegionStats(dailyData), [dailyData])
   const [compareA, setCompareA] = useState("")
   const [compareB, setCompareB] = useState("")
+  const [mapMetric, setMapMetric] = useState("distance")
 
   const countryHits = dailyData.filter((row) => isYes(row["Country Hit"])).length
   const regionHits = dailyData.filter((row) => isYes(row["Region Hit"])).length
@@ -69,6 +71,42 @@ export default function DailyChallengeTab({ dailyData = [] }) {
           <DailyRegionList regionStats={regionStats} />
         </Panel>
       </div>
+
+      <Panel className="mb-6 sm:mb-8">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5 sm:mb-6">
+          <PanelHeader
+            eyebrow="Daily Map"
+            title="Daily Challenge Heat Map"
+            right={mapMetric === "distance" ? "Avg Distance" : "Region Volume"}
+          />
+
+          <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-2 backdrop-blur-xl overflow-x-auto">
+            <button
+              onClick={() => setMapMetric("distance")}
+              className={`shrink-0 px-4 sm:px-5 py-2 rounded-xl text-sm sm:text-base font-bold transition-all ${
+                mapMetric === "distance"
+                  ? "bg-cyan-500 text-black"
+                  : "text-slate-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              Distance
+            </button>
+
+            <button
+              onClick={() => setMapMetric("volume")}
+              className={`shrink-0 px-4 sm:px-5 py-2 rounded-xl text-sm sm:text-base font-bold transition-all ${
+                mapMetric === "volume"
+                  ? "bg-cyan-500 text-black"
+                  : "text-slate-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              Volume
+            </button>
+          </div>
+        </div>
+
+        <GeoHeatMap regionStats={regionStats} metric={mapMetric} />
+      </Panel>
 
       <Panel className="mb-6 sm:mb-8">
         <PanelHeader eyebrow="Head-to-Head" title="Player Comparison" right="Daily Challenge" />
@@ -248,29 +286,45 @@ function DailyPlayerTable({ playerStats = [] }) {
 
 function DailyPlayerCard({ player }) {
   return (
-    <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl hover:bg-white/10 transition-all">
-      <div className="flex items-end gap-4 mb-5 sm:mb-6">
-        <PlayerAvatar playerName={player.name} className="h-20 w-20 sm:h-24 sm:w-24" />
+    <details className="group bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl hover:bg-white/10 transition-all">
+      <summary className="list-none cursor-pointer">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 min-w-0">
+            <PlayerAvatar playerName={player.name} className="h-16 w-16 sm:h-20 sm:w-20" />
 
-        <div>
-          <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
-            Daily Profile
-          </p>
-          <h3 className="text-2xl sm:text-3xl font-black break-words">{player.name}</h3>
+            <div className="min-w-0">
+              <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
+                Daily Profile
+              </p>
+              <h3 className="text-xl sm:text-2xl font-black truncate">{player.name}</h3>
+              <p className="text-slate-400 text-sm">
+                {formatDistance(player.avgDistance)} avg • {formatPercent(player.countryHitRate)} country
+              </p>
+            </div>
+          </div>
+
+          <span className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-slate-300 group-open:hidden">
+            Open
+          </span>
+          <span className="hidden shrink-0 rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-xs font-bold text-cyan-300 group-open:inline">
+            Close
+          </span>
+        </div>
+      </summary>
+
+      <div className="mt-5 sm:mt-6">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <MiniStat label="Guesses" value={player.guesses} />
+          <MiniStat label="Avg Distance" value={formatDistance(player.avgDistance)} accent="text-cyan-400" />
+          <MiniStat label="Country Hit" value={formatPercent(player.countryHitRate)} accent="text-purple-400" />
+          <MiniStat label="Region Hit" value={formatPercent(player.regionHitRate)} accent="text-pink-400" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-3 sm:mt-4">
+          <MiniStat label="Strongest Region" value={player.strongestRegion} accent="text-emerald-400" />
+          <MiniStat label="Weakest Region" value={player.weakestRegion} accent="text-amber-400" />
         </div>
       </div>
-
-      <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        <MiniStat label="Guesses" value={player.guesses} />
-        <MiniStat label="Avg Distance" value={formatDistance(player.avgDistance)} accent="text-cyan-400" />
-        <MiniStat label="Country Hit" value={formatPercent(player.countryHitRate)} accent="text-purple-400" />
-        <MiniStat label="Region Hit" value={formatPercent(player.regionHitRate)} accent="text-pink-400" />
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-3 sm:mt-4">
-        <MiniStat label="Strongest Region" value={player.strongestRegion} accent="text-emerald-400" />
-        <MiniStat label="Weakest Region" value={player.weakestRegion} accent="text-amber-400" />
-      </div>
-    </div>
+    </details>
   )
 }
 
