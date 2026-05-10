@@ -12,7 +12,7 @@ import {
 import DailyChallengeTab from "./components/DailyChallengeTab.jsx"
 import GeoHeatMap from "./components/GeoHeatMap.jsx"
 import { PlayerAvatar, TeamLogo } from "./components/LeagueIdentity.jsx"
-import { buildDailyPlayerStats, formatDistance, formatPercent } from "./data/stats.js"
+import { buildDailyPlayerStats, formatDistance, formatPercent, getDistanceTier } from "./data/stats.js"
 const TEAM_BRANDING = {
   Lats: {
     primary: "from-cyan-500 to-blue-500",
@@ -36,6 +36,24 @@ function normalizeTeamName(teamName) {
   if (lower.includes("lats")) return "Lats"
 
   return normalized
+}
+
+function normalizePlayerName(playerName) {
+  const normalized = String(playerName || "").normalize("NFKC").trim().replace(/\s+/g, " ")
+  const canonicalNames = {
+    "al harris": "Al Harris",
+    "andrew card": "Andrew Card",
+    "buddy hammon": "Buddy Hammon",
+    "caleb heck": "Caleb Heck",
+    "claleb heck": "Caleb Heck",
+    "clark marshall": "Clark Marshall",
+    "chris rossi": "Chris Rossi",
+    "jarratt rouse": "Jarratt Rouse",
+    "luke gasque": "Luke Gasque",
+    "nick sant": "Nick Sant",
+  }
+
+  return canonicalNames[normalized.toLowerCase()] || normalized
 }
 
 function getTeamBrand(teamName) {
@@ -142,12 +160,12 @@ const playerStats = useMemo(() => {
   }
 
   filteredRawData.forEach((row) => {
-    const player = row["CTP Player"];
+    const player = normalizePlayerName(row["CTP Player"]);
     const team = normalizeTeamName(row["CTP Team"]);
     const region = row["Region"];
     const distance = parseFloat(row["CTP Distance (km)"]) || 0;
     const ko = row["Knockout Punch"];
-    const defensivePlayer = row["2nd CTP"];
+    const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
     const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
 
     if (defensivePlayer) {
@@ -187,6 +205,7 @@ const playerStats = useMemo(() => {
   });
 
   return Object.values(map)
+    .filter((p) => p.ctps > 0)
     .map((p) => {
       const regionAverages = Object.entries(p.regions)
         .map(([name, data]) => ({
@@ -267,7 +286,7 @@ const teamStats = useMemo(() => {
   const playerTeams = {};
 
   filteredRawData.forEach((row) => {
-    const player = row["CTP Player"];
+    const player = normalizePlayerName(row["CTP Player"]);
     const team = normalizeTeamName(row["CTP Team"]);
 
     if (player && team) {
@@ -279,7 +298,7 @@ const teamStats = useMemo(() => {
     const team = normalizeTeamName(row["CTP Team"]);
     const distance = parseFloat(row["CTP Distance (km)"]) || 0;
     const ko = row["Knockout Punch"];
-    const defensivePlayer = row["2nd CTP"];
+    const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
     const defensiveTeam = playerTeams[defensivePlayer];
     const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
 
@@ -335,9 +354,9 @@ const regionStats = useMemo(() => {
 
   filteredRawData.forEach((row) => {
     const region = row["Region"];
-    const player = row["CTP Player"];
+    const player = normalizePlayerName(row["CTP Player"]);
     const distance = parseFloat(row["CTP Distance (km)"]) || 0;
-    const defensivePlayer = row["2nd CTP"];
+    const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
     const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
 
     if (!region || !player) return;
@@ -418,9 +437,9 @@ const countryStats = useMemo(() => {
   filteredRawData.forEach((row) => {
     const country = row["Country/State"];
     const region = row["Region"];
-    const player = row["CTP Player"];
+    const player = normalizePlayerName(row["CTP Player"]);
     const distance = parseFloat(row["CTP Distance (km)"]) || 0;
-    const defensivePlayer = row["2nd CTP"];
+    const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
     const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
 
     if (!country || !player) return;
@@ -866,73 +885,66 @@ function RegionsTab({ regionStats, countryStats }) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {activeGeoStats.map((region) => (
-          <details
-            key={region.name}
-            className="interactive-card group bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl hover:bg-white/10 transition-all"
-          >
-            <summary className="list-none cursor-pointer">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
-                  {geoLabel} Intelligence
-                </p>
+        {activeGeoStats.map((region) => {
+          const tier = getDistanceTier(region.avgDistance)
 
-                <h3 className="text-xl sm:text-2xl font-black break-words">
-                  {region.name}
-                </h3>
+          return (
+            <details
+              key={region.name}
+              className="interactive-card group bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-[2rem] p-4 sm:p-6 shadow-2xl hover:bg-white/10 transition-all"
+            >
+              <summary className="list-none cursor-pointer">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-cyan-400 uppercase tracking-[0.2em] text-xs font-bold mb-2">
+                    {geoLabel} Intelligence
+                  </p>
+
+                  <h3 className={`text-xl sm:text-2xl font-black break-words ${tier.text}`}>
+                    {region.name}
+                  </h3>
+                </div>
+
+                <div className="text-right">
+                  <p className="text-cyan-400 font-black">
+                    {region.avgDistance.toFixed(1)} km
+                  </p>
+
+                  <p className="text-slate-500 text-xs">
+                    avg distance
+                  </p>
+                </div>
               </div>
+              </summary>
 
-              <div className="text-right">
-                <p className="text-cyan-400 font-black">
-                  {region.avgDistance.toFixed(1)} km
-                </p>
+              <div className="space-y-4 mt-5 sm:mt-6">
+                <MiniStat
+                  label="Top Specialist"
+                  value={region.bestPlayer}
+                  accent="text-cyan-400"
+                />
 
-                <p className="text-slate-500 text-xs">
-                  avg distance
-                </p>
+                <MiniStat
+                  label="CTPs"
+                  value={region.appearances}
+                  accent="text-cyan-400"
+                />
+
+                <MiniStat
+                  label="Defensive Pins"
+                  value={region.defensivePins || 0}
+                  accent="text-cyan-400"
+                />
+
+                <MiniStat
+                  label="Difficulty Tier"
+                  value={tier.label}
+                  accent={tier.text}
+                />
               </div>
-            </div>
-            </summary>
-
-            <div className="space-y-4 mt-5 sm:mt-6">
-              <MiniStat
-                label="Top Specialist"
-                value={region.bestPlayer}
-                accent="text-cyan-400"
-              />
-
-              <MiniStat
-                label="Defensive Pins"
-                value={region.defensivePins || 0}
-                accent="text-cyan-400"
-              />
-
-              <MiniStat
-                label="Appearances"
-                value={region.appearances}
-              />
-
-              <MiniStat
-                label="Difficulty Tier"
-                value={
-                  region.avgDistance < 50
-                    ? "Controlled"
-                    : region.avgDistance < 150
-                    ? "Contested"
-                    : "Danger Zone"
-                }
-                accent={
-                  region.avgDistance < 50
-                    ? "text-emerald-400"
-                    : region.avgDistance < 150
-                    ? "text-amber-400"
-                    : "text-pink-400"
-                }
-              />
-            </div>
-          </details>
-        ))}
+            </details>
+          )
+        })}
       </div>
     </>
   )
