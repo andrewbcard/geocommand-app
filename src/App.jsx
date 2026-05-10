@@ -4,6 +4,8 @@ import {
   BarChart,
   Bar,
   Cell,
+  CartesianGrid,
+  LabelList,
   XAxis,
   YAxis,
   Tooltip,
@@ -776,6 +778,18 @@ function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions, leagueSt
         </Panel>
       </div>
 
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
+        <Panel>
+          <PanelHeader eyebrow="Defensive Specialists" title="Defensive Pins" right="Season" />
+          <DefensivePinsList playerStats={playerStats} />
+        </Panel>
+
+        <Panel>
+          <PanelHeader eyebrow="Finishers" title="KO Leaderboard" right="Season" />
+          <KoLeaderboard playerStats={playerStats} />
+        </Panel>
+      </div>
+
       <BottomAnalytics liveMatches={liveMatches} liveRegions={liveRegions} leagueStats={leagueStats} />
     </>
   )
@@ -927,12 +941,6 @@ function RegionsTab({ regionStats, countryStats }) {
                 <MiniStat
                   label="CTPs"
                   value={region.appearances}
-                  accent="text-cyan-400"
-                />
-
-                <MiniStat
-                  label="Defensive Pins"
-                  value={region.defensivePins || 0}
                   accent="text-cyan-400"
                 />
 
@@ -1378,8 +1386,63 @@ function PlayerList({ playerStats = [] }) {
           <div className="text-right">
             <p className="text-cyan-400 font-bold">{player.ctps}</p>
             <p className="text-slate-500 text-xs">CTPs</p>
-            <p className="text-cyan-300 font-bold mt-1">{player.defensivePins}</p>
-            <p className="text-slate-500 text-xs">Defensive Pins</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function DefensivePinsList({ playerStats = [] }) {
+  const defensivePlayers = [...playerStats]
+    .filter((player) => player.defensivePins > 0)
+    .sort((a, b) => b.defensivePins - a.defensivePins || a.avgDefensiveDistance - b.avgDefensiveDistance)
+
+  return (
+    <div className="space-y-3">
+      {defensivePlayers.slice(0, 6).map((player, index) => (
+        <div key={player.name} className="flex items-center justify-between gap-3 bg-white/5 rounded-2xl p-4 border border-white/10">
+          <div className="flex items-center gap-3 min-w-0">
+            <PlayerAvatar playerName={player.name} className="h-12 w-12" />
+
+            <div className="min-w-0">
+              <p className="font-bold truncate">#{index + 1} {player.name}</p>
+              <p className="text-slate-500 text-sm truncate">{player.team}</p>
+            </div>
+          </div>
+
+          <div className="text-right shrink-0">
+            <p className="text-cyan-300 font-black">{player.defensivePins}</p>
+            <p className="text-slate-500 text-xs">pins</p>
+            <p className="text-slate-300 text-xs mt-1">{formatDistance(player.avgDefensiveDistance)}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function KoLeaderboard({ playerStats = [] }) {
+  const koPlayers = [...playerStats]
+    .filter((player) => player.kos > 0)
+    .sort((a, b) => b.kos - a.kos || a.avgDistance - b.avgDistance)
+
+  return (
+    <div className="space-y-3">
+      {koPlayers.slice(0, 6).map((player, index) => (
+        <div key={player.name} className="flex items-center justify-between gap-3 bg-white/5 rounded-2xl p-4 border border-white/10">
+          <div className="flex items-center gap-3 min-w-0">
+            <PlayerAvatar playerName={player.name} className="h-12 w-12" />
+
+            <div className="min-w-0">
+              <p className="font-bold truncate">#{index + 1} {player.name}</p>
+              <p className="text-slate-500 text-sm truncate">{player.team}</p>
+            </div>
+          </div>
+
+          <div className="text-right shrink-0">
+            <p className="text-pink-300 font-black">{player.kos}</p>
+            <p className="text-slate-500 text-xs">KOs</p>
           </div>
         </div>
       ))}
@@ -1597,14 +1660,39 @@ function PlayerDistanceChart({ playerStats = [] }) {
   const chartData = [...playerStats]
     .sort((a, b) => a.avgDistance - b.avgDistance)
     .slice(0, 10)
+    .map((player) => ({
+      ...player,
+      fill: getDistanceTier(player.avgDistance).fill,
+      shortName: player.name.split(" ").slice(-1)[0],
+    }))
 
   return (
-    <div className="h-80 w-full">
+    <div className="h-[22rem] w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={chartData}>
-          <XAxis dataKey="name" stroke="#94a3b8" />
-          <YAxis stroke="#94a3b8" />
+        <BarChart
+          data={chartData}
+          margin={{ top: 24, right: 12, left: 0, bottom: 10 }}
+          barCategoryGap="24%"
+        >
+          <CartesianGrid stroke="rgba(148, 163, 184, 0.12)" vertical={false} />
+          <XAxis
+            dataKey="shortName"
+            stroke="#94a3b8"
+            tick={{ fill: "#94a3b8", fontSize: 12, fontWeight: 700 }}
+            tickLine={false}
+            axisLine={{ stroke: "rgba(148, 163, 184, 0.35)" }}
+            interval={0}
+          />
+          <YAxis
+            stroke="#94a3b8"
+            tick={{ fill: "#94a3b8", fontSize: 12, fontWeight: 700 }}
+            tickLine={false}
+            axisLine={false}
+            width={42}
+          />
           <Tooltip
+            formatter={(value) => [formatDistance(value), "Avg Distance"]}
+            labelFormatter={(_, payload) => payload?.[0]?.payload?.name || ""}
             contentStyle={{
               background: "#0f172a",
               border: "1px solid rgba(255,255,255,0.12)",
@@ -1612,7 +1700,19 @@ function PlayerDistanceChart({ playerStats = [] }) {
               color: "#fff",
             }}
           />
-          <Bar dataKey="avgDistance" radius={[10, 10, 0, 0]} />
+          <Bar dataKey="avgDistance" radius={[12, 12, 4, 4]} maxBarSize={88}>
+            <LabelList
+              dataKey="avgDistance"
+              position="top"
+              formatter={(value) => `${Math.round(value)} km`}
+              fill="#e2e8f0"
+              fontSize={12}
+              fontWeight={800}
+            />
+            {chartData.map((entry, index) => (
+              <Cell key={`player-distance-${index}`} fill={entry.fill} />
+            ))}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>
