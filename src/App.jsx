@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
-import { Check, Copy, Share2 } from "lucide-react"
+import { Check, Download, Share2 } from "lucide-react"
+import { toPng } from "html-to-image"
 import {
   BarChart,
   Bar,
@@ -1245,6 +1246,7 @@ function PlayersTab({ playerStats = [], dailyData = [] }) {
 
 function PlayerProfileDetail({ player }) {
   const [shareState, setShareState] = useState("idle")
+  const profileCardRef = useRef(null)
 
   if (!player) {
     return (
@@ -1265,34 +1267,55 @@ function PlayerProfileDetail({ player }) {
     }))
     .sort((a, b) => a.avgDistance - b.avgDistance)
 
-  async function shareProfile() {
-    const shareData = {
-      title: `${player.name} GeoCommand Profile`,
-      text: profileShareText,
-      url: window.location.href,
-    }
-
+  async function shareProfileImage() {
     try {
-      if (navigator.share) {
-        await navigator.share(shareData)
+      setShareState("rendering")
+
+      const dataUrl = await toPng(profileCardRef.current, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: "#111827",
+        filter: (node) => node.dataset?.shareAction !== "true",
+      })
+      const imageBlob = await fetch(dataUrl).then((response) => response.blob())
+      const fileName = `${player.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}-geocommand-card.png`
+      const imageFile = new File([imageBlob], fileName, { type: "image/png" })
+
+      if (navigator.canShare?.({ files: [imageFile] })) {
+        await navigator.share({
+          title: `${player.name} GeoCommand Profile`,
+          text: profileShareText,
+          files: [imageFile],
+        })
+
+        setShareState("shared")
       } else {
-        await navigator.clipboard.writeText(`${profileShareText} ${window.location.href}`)
+        const link = document.createElement("a")
+        link.href = dataUrl
+        link.download = fileName
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+
+        setShareState("downloaded")
       }
 
-      setShareState("shared")
       window.setTimeout(() => setShareState("idle"), 1800)
     } catch (error) {
-      if (error.name === "AbortError") return
+      if (error.name === "AbortError") {
+        setShareState("idle")
+        return
+      }
 
       await navigator.clipboard.writeText(`${profileShareText} ${window.location.href}`)
-      setShareState("copied")
+      setShareState("downloaded")
       window.setTimeout(() => setShareState("idle"), 1800)
     }
   }
 
   return (
     <div className="space-y-6">
-      <div className={`rounded-2xl sm:rounded-[2rem] border ${brand.border} bg-white/5 p-4 sm:p-6`}>
+      <div ref={profileCardRef} className={`rounded-2xl sm:rounded-[2rem] border ${brand.border} bg-[#1f2430] p-4 sm:p-6`}>
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
           <div className="flex flex-col sm:flex-row sm:items-end gap-5">
             <PlayerAvatar playerName={player.name} className="h-32 w-32 sm:h-40 sm:w-40" />
@@ -1312,11 +1335,19 @@ function PlayerProfileDetail({ player }) {
 
               <button
                 type="button"
-                onClick={shareProfile}
+                onClick={shareProfileImage}
+                data-share-action="true"
+                disabled={shareState === "rendering"}
                 className="mt-5 inline-flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-black text-cyan-200 transition-all hover:bg-cyan-400/20"
               >
-                {shareState === "idle" ? <Share2 className="h-4 w-4" /> : shareState === "shared" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                {shareState === "idle" ? "Share Profile" : shareState === "shared" ? "Shared" : "Copied"}
+                {shareState === "idle" ? <Share2 className="h-4 w-4" /> : shareState === "shared" ? <Check className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+                {shareState === "idle"
+                  ? "Share Card"
+                  : shareState === "rendering"
+                  ? "Creating Image"
+                  : shareState === "shared"
+                  ? "Shared"
+                  : "Downloaded"}
               </button>
             </div>
           </div>
