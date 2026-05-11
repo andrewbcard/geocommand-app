@@ -58,6 +58,16 @@ function normalizePlayerName(playerName) {
   return canonicalNames[normalized.toLowerCase()] || normalized
 }
 
+function parseSheetDate(value) {
+  const [month, day, year] = String(value || "").split("/").map(Number)
+
+  if (!month || !day || !year) return 0
+
+  const fullYear = year < 100 ? 2000 + year : year
+
+  return new Date(fullYear, month - 1, day).getTime()
+}
+
 function getTeamBrand(teamName) {
   if (!teamName) return TEAM_BRANDING.Lats
 
@@ -141,6 +151,32 @@ const filteredDailyData = useMemo(() => {
   })
 }, [dailyData, selectedModes])
 
+const currentPlayerTeams = useMemo(() => {
+  const latestTeams = {}
+
+  rawData.forEach((row, index) => {
+    const player = normalizePlayerName(row["CTP Player"])
+    const team = normalizeTeamName(row["CTP Team"])
+    const dateValue = parseSheetDate(row["Date"])
+
+    if (!player || !team) return
+
+    const existing = latestTeams[player]
+    const sortValue = dateValue || index
+
+    if (!existing || sortValue >= existing.sortValue) {
+      latestTeams[player] = {
+        team,
+        sortValue,
+      }
+    }
+  })
+
+  return Object.fromEntries(
+    Object.entries(latestTeams).map(([player, data]) => [player, data.team])
+  )
+}, [rawData])
+
 const playerStats = useMemo(() => {
   const map = {};
 
@@ -168,7 +204,7 @@ const playerStats = useMemo(() => {
 
   filteredRawData.forEach((row) => {
     const player = normalizePlayerName(row["CTP Player"]);
-    const team = normalizeTeamName(row["CTP Team"]);
+    const team = currentPlayerTeams[player] || normalizeTeamName(row["CTP Team"]);
     const region = row["Region"];
     const distance = parseFloat(row["CTP Distance (km)"]) || 0;
     const ko = row["Knockout Punch"];
@@ -176,7 +212,7 @@ const playerStats = useMemo(() => {
     const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
 
     if (defensivePlayer) {
-      const defender = ensurePlayer(defensivePlayer)
+      const defender = ensurePlayer(defensivePlayer, currentPlayerTeams[defensivePlayer])
 
       defender.defensivePins += 1
       defender.totalDefensiveDistance += defensiveDistance
@@ -286,27 +322,17 @@ const playerStats = useMemo(() => {
       };
     })
     .sort((a, b) => b.ctps - a.ctps || a.avgDistance - b.avgDistance);
-}, [filteredRawData]);
+}, [filteredRawData, currentPlayerTeams]);
 
 const teamStats = useMemo(() => {
   const map = {};
-  const playerTeams = {};
-
-  filteredRawData.forEach((row) => {
-    const player = normalizePlayerName(row["CTP Player"]);
-    const team = normalizeTeamName(row["CTP Team"]);
-
-    if (player && team) {
-      playerTeams[player] = team
-    }
-  })
 
   filteredRawData.forEach((row) => {
     const team = normalizeTeamName(row["CTP Team"]);
     const distance = parseFloat(row["CTP Distance (km)"]) || 0;
     const ko = row["Knockout Punch"];
     const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
-    const defensiveTeam = playerTeams[defensivePlayer];
+    const defensiveTeam = currentPlayerTeams[defensivePlayer];
     const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
 
     if (!team) return;
@@ -354,7 +380,7 @@ const teamStats = useMemo(() => {
         team.defensivePins > 0 ? team.totalDefensiveDistance / team.defensivePins : 0,
     }))
     .sort((a, b) => b.ctps - a.ctps);
-}, [filteredRawData]);
+}, [filteredRawData, currentPlayerTeams]);
 
 const regionStats = useMemo(() => {
   const map = {};
