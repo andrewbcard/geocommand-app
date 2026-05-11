@@ -699,7 +699,7 @@ function GeoGuessrActivityTicker({ activity }) {
         <span className={`activity-light h-3 w-3 shrink-0 rounded-full ${hasActivePlayers ? "bg-red-500" : "bg-slate-500"}`} />
 
         <p className="shrink-0 text-xs font-black uppercase tracking-[0.2em] text-red-200">
-          Playing right now:
+          Playing Now:
         </p>
 
         <div className="min-w-0 flex-1 overflow-hidden">
