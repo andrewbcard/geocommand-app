@@ -160,7 +160,7 @@ useEffect(() => {
 
   fetchActivity()
 
-  const interval = window.setInterval(fetchActivity, 10 * 60 * 1000)
+  const interval = window.setInterval(fetchActivity, 60 * 1000)
 
   return () => {
     isMounted = false
@@ -736,7 +736,7 @@ function GeoGuessrActivityTicker({ activity }) {
 
         {activity.checkedAt && (
           <p className="hidden shrink-0 text-xs font-bold text-slate-500 sm:block">
-            Checks every 10 min
+            Checks every minute
           </p>
         )}
       </div>
