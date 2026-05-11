@@ -80,21 +80,26 @@ const DAILY_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vQeSSeiTso_obYVNbArRVNpz2PBW5LuQ24dEDMG0kdBH4axSCAajaP6_GTbBENbyRraoOrXUE4Bjitj/pub?gid=1946076674&single=true&output=csv";
 
 useEffect(() => {
+  const hasData = (row) => Object.values(row).some((value) => String(value || "").trim())
+  const freshUrl = (url) => `${url}&cacheBust=${Date.now()}`
+
   const fetchSheets = () => {
-    Papa.parse(RAW_DATA_URL, {
+    Papa.parse(freshUrl(RAW_DATA_URL), {
       download: true,
       header: true,
       complete: (results) => {
-        setRawData(results.data);
+        setRawData(results.data.filter(hasData));
       },
+      error: () => setRawData([]),
     });
 
-    Papa.parse(DAILY_URL, {
+    Papa.parse(freshUrl(DAILY_URL), {
       download: true,
       header: true,
       complete: (results) => {
-        setDailyData(results.data);
+        setDailyData(results.data.filter(hasData));
       },
+      error: () => setDailyData([]),
     });
   };
 
