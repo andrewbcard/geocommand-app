@@ -10,7 +10,7 @@ const PLAYERS = [
   { name: "Jarratt Rouse", id: "69a5e0ea9f4b9e73e77dbcc7" },
 ]
 
-const ACTIVE_MINUTES = 10
+const ACTIVE_MINUTES = 30
 const RECENT_MINUTES = 60
 
 function extractNextData(html) {
