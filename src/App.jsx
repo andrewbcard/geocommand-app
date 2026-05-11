@@ -1112,6 +1112,7 @@ function PlayersTab({ playerStats = [], dailyData = [] }) {
 
   const [selectedPlayerName, setSelectedPlayerName] = useState("")
   const [comparePlayerName, setComparePlayerName] = useState("")
+  const profileShareRef = useRef(null)
   const selectedPlayer =
     playerProfiles.find((player) => player.name === selectedPlayerName) || playerProfiles[0]
   const comparisonPlayer =
@@ -1153,10 +1154,12 @@ function PlayersTab({ playerStats = [], dailyData = [] }) {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-8">
-        <Panel className="xl:col-span-2">
-          <PanelHeader eyebrow="Profile Focus" title={selectedPlayer?.name || "Choose a Player"} right={selectedPlayer?.team || "Season"} />
-          <PlayerProfileDetail player={selectedPlayer} />
-        </Panel>
+        <div ref={profileShareRef} className="xl:col-span-2">
+          <Panel>
+            <PanelHeader eyebrow="Profile Focus" title={selectedPlayer?.name || "Choose a Player"} right={selectedPlayer?.team || "Season"} />
+            <PlayerProfileDetail player={selectedPlayer} shareTargetRef={profileShareRef} />
+          </Panel>
+        </div>
 
         <Panel>
           <PanelHeader eyebrow="Head-to-Head" title="Compare Players" right="Season + Daily" />
@@ -1243,9 +1246,8 @@ function PlayersTab({ playerStats = [], dailyData = [] }) {
   )
 }
 
-function PlayerProfileDetail({ player }) {
+function PlayerProfileDetail({ player, shareTargetRef }) {
   const [shareState, setShareState] = useState("idle")
-  const profileCardRef = useRef(null)
 
   if (!player) {
     return (
@@ -1270,7 +1272,7 @@ function PlayerProfileDetail({ player }) {
     try {
       setShareState("rendering")
 
-      const dataUrl = await toPng(profileCardRef.current, {
+      const dataUrl = await toPng(shareTargetRef.current, {
         cacheBust: true,
         pixelRatio: 2,
         backgroundColor: "#111827",
@@ -1314,7 +1316,7 @@ function PlayerProfileDetail({ player }) {
 
   return (
     <div className="space-y-6">
-      <div ref={profileCardRef} className={`rounded-2xl sm:rounded-[2rem] border ${brand.border} bg-[#1f2430] p-4 sm:p-6`}>
+      <div className={`rounded-2xl sm:rounded-[2rem] border ${brand.border} bg-[#1f2430] p-4 sm:p-6`}>
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
           <div className="flex flex-col sm:flex-row sm:items-end gap-5">
             <PlayerAvatar playerName={player.name} className="h-32 w-32 sm:h-40 sm:w-40" />
