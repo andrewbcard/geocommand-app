@@ -77,7 +77,7 @@ body {
 }
 
 .activity-marquee {
-  animation: activity-marquee 24s linear infinite;
+  animation: activity-marquee 16s linear infinite;
 }
 
 @media (min-width: 768px) {
