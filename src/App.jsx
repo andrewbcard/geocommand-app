@@ -694,7 +694,6 @@ function GeoGuessrActivityTicker({ activity }) {
     ["active", "likely-active"].includes(player.status)
   )
   const hasActivePlayers = activePlayers.length > 0
-  const tickerPlayers = [...activePlayers, ...activePlayers]
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 border-t border-red-400/20 bg-[#050812]/95 px-3 py-3 text-white shadow-[0_-18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">
@@ -720,13 +719,29 @@ function GeoGuessrActivityTicker({ activity }) {
             )}
 
             {!activity.loading && !activity.error &&
-              tickerPlayers.map((player, index) => (
+              activePlayers.map((player) => (
                 <a
-                  key={`${player.id}-${index}`}
+                  key={player.id}
                   href={player.url}
                   target="_blank"
                   rel="noreferrer"
                   className="whitespace-nowrap text-sm font-black text-white transition-colors hover:text-cyan-300"
+                >
+                  {player.name}
+                  <span className="ml-2 text-xs font-bold text-slate-400">
+                    {player.status === "active" ? "active" : "active recently"} {formatActivityTime(player.minutesAgo)}
+                  </span>
+                </a>
+              ))}
+
+            {!activity.loading && !activity.error &&
+              activePlayers.map((player) => (
+                <a
+                  key={`${player.id}-mobile-repeat`}
+                  href={player.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="whitespace-nowrap text-sm font-black text-white transition-colors hover:text-cyan-300 md:hidden"
                 >
                   {player.name}
                   <span className="ml-2 text-xs font-bold text-slate-400">

@@ -44,7 +44,7 @@ body {
   }
 
   to {
-    transform: translateX(-35%);
+    transform: translateX(-50%);
   }
 }
 
@@ -83,10 +83,6 @@ body {
 @media (min-width: 768px) {
   .activity-marquee {
     animation: none;
-  }
-
-  .activity-marquee > *:nth-child(n + 2) {
-    display: none;
   }
 }
 
