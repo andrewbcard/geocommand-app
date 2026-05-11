@@ -690,8 +690,11 @@ function formatActivityTime(minutesAgo) {
 }
 
 function GeoGuessrActivityTicker({ activity }) {
-  const activePlayers = activity.players.filter((player) => player.status === "active")
+  const activePlayers = activity.players.filter((player) =>
+    ["active", "likely-active"].includes(player.status)
+  )
   const hasActivePlayers = activePlayers.length > 0
+  const tickerPlayers = [...activePlayers, ...activePlayers]
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 border-t border-red-400/20 bg-[#050812]/95 px-3 py-3 text-white shadow-[0_-18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">
@@ -713,13 +716,13 @@ function GeoGuessrActivityTicker({ activity }) {
             )}
 
             {!activity.loading && !activity.error && !hasActivePlayers && (
-              <span className="text-sm font-bold text-slate-400">No players active in the last 10 minutes</span>
+              <span className="text-sm font-bold text-slate-400">No players active recently</span>
             )}
 
             {!activity.loading && !activity.error &&
-              activePlayers.map((player) => (
+              tickerPlayers.map((player, index) => (
                 <a
-                  key={player.id}
+                  key={`${player.id}-${index}`}
                   href={player.url}
                   target="_blank"
                   rel="noreferrer"
@@ -727,7 +730,7 @@ function GeoGuessrActivityTicker({ activity }) {
                 >
                   {player.name}
                   <span className="ml-2 text-xs font-bold text-slate-400">
-                    active {formatActivityTime(player.minutesAgo)}
+                    {player.status === "active" ? "active" : "active recently"} {formatActivityTime(player.minutesAgo)}
                   </span>
                 </a>
               ))}

@@ -11,7 +11,8 @@ const PLAYERS = [
 ]
 
 const ACTIVE_MINUTES = 30
-const RECENT_MINUTES = 60
+const LIKELY_ACTIVE_MINUTES = 120
+const RECENT_MINUTES = 180
 
 function extractNextData(html) {
   const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/)
@@ -53,6 +54,8 @@ async function fetchPlayerActivity(player) {
           ? "unknown"
           : minutesAgo <= ACTIVE_MINUTES
           ? "active"
+          : minutesAgo <= LIKELY_ACTIVE_MINUTES
+          ? "likely-active"
           : minutesAgo <= RECENT_MINUTES
           ? "recent"
           : "away",
@@ -76,6 +79,7 @@ export default async function handler(request, response) {
   response.status(200).json({
     checkedAt: new Date().toISOString(),
     activeWindowMinutes: ACTIVE_MINUTES,
+    likelyActiveWindowMinutes: LIKELY_ACTIVE_MINUTES,
     recentWindowMinutes: RECENT_MINUTES,
     players,
   })

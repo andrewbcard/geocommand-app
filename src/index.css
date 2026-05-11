@@ -77,12 +77,16 @@ body {
 }
 
 .activity-marquee {
-  animation: activity-marquee 8s linear infinite;
+  animation: activity-marquee 2.67s linear infinite;
 }
 
 @media (min-width: 768px) {
   .activity-marquee {
     animation: none;
+  }
+
+  .activity-marquee > *:nth-child(n + 2) {
+    display: none;
   }
 }
 
