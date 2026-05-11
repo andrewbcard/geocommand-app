@@ -17,6 +17,38 @@ export function formatDistance(value) {
   return `${value.toFixed(1)} km`
 }
 
+export function parseGuessTime(value) {
+  const parts = String(value || "")
+    .trim()
+    .split(":")
+    .map(Number)
+
+  if (parts.length === 3 && parts.every(Number.isFinite)) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2]
+  }
+
+  if (parts.length === 2 && parts.every(Number.isFinite)) {
+    return parts[0] * 60 + parts[1]
+  }
+
+  return 0
+}
+
+export function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "0:00"
+
+  const rounded = Math.round(seconds)
+  const hours = Math.floor(rounded / 3600)
+  const minutes = Math.floor((rounded % 3600) / 60)
+  const remainingSeconds = rounded % 60
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`
+  }
+
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`
+}
+
 export function getBestAndWeakestRegion(regions) {
   const rankedRegions = Object.entries(regions)
     .map(([name, data]) => ({
@@ -65,6 +97,7 @@ export function buildDailyPlayerStats(dailyRows) {
     const player = row.Player
     const region = row.Region
     const distance = parseDistance(row["Distance (km)"])
+    const guessTime = parseGuessTime(row["Time/Guess"])
 
     if (!player) return
 
@@ -75,12 +108,14 @@ export function buildDailyPlayerStats(dailyRows) {
         countryHits: 0,
         regionHits: 0,
         totalDistance: 0,
+        totalGuessTime: 0,
         regions: {},
       }
     }
 
     map[player].guesses += 1
     map[player].totalDistance += distance
+    map[player].totalGuessTime += guessTime
 
     if (isYes(row["Country Hit"])) map[player].countryHits += 1
     if (isYes(row["Region Hit"])) map[player].regionHits += 1
@@ -105,6 +140,7 @@ export function buildDailyPlayerStats(dailyRows) {
       return {
         ...player,
         avgDistance: player.totalDistance / player.guesses,
+        avgGuessTime: player.totalGuessTime / player.guesses,
         countryHitRate: (player.countryHits / player.guesses) * 100,
         regionHitRate: (player.regionHits / player.guesses) * 100,
         ...regionRanks,

@@ -6,6 +6,7 @@ import {
   buildDailyPlayerStats,
   buildDailyRegionStats,
   formatDistance,
+  formatDuration,
   formatPercent,
   isYes,
 } from "../data/stats.js"
@@ -328,6 +329,7 @@ function DailyPlayerCard({ player }) {
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <MiniStat label="Guesses" value={player.guesses} />
           <MiniStat label="Avg Distance" value={formatDistance(player.avgDistance)} accent="text-cyan-400" />
+          <MiniStat label="Avg Time" value={formatDuration(player.avgGuessTime)} accent="text-emerald-400" />
           <MiniStat label="Country Hit" value={formatPercent(player.countryHitRate)} accent="text-purple-400" />
           <MiniStat label="Region Hit" value={formatPercent(player.regionHitRate)} accent="text-pink-400" />
         </div>

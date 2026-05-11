@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
+import { Check, Copy, Share2 } from "lucide-react"
 import {
   BarChart,
   Bar,
@@ -82,6 +83,12 @@ function getTeamBrand(teamName) {
 export default function App() {
   const [rawData, setRawData] = useState([]);
 const [dailyData, setDailyData] = useState([]);
+const [geoguessrActivity, setGeoguessrActivity] = useState({
+  players: [],
+  checkedAt: null,
+  loading: true,
+  error: null,
+});
 
 const RAW_DATA_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vQeSSeiTso_obYVNbArRVNpz2PBW5LuQ24dEDMG0kdBH4axSCAajaP6_GTbBENbyRraoOrXUE4Bjitj/pub?gid=0&single=true&output=csv";
@@ -119,6 +126,47 @@ useEffect(() => {
 
   return () => clearInterval(interval);
 }, []);
+
+useEffect(() => {
+  let isMounted = true
+
+  async function fetchActivity() {
+    try {
+      const response = await fetch("/api/geoguessr-activity")
+
+      if (!response.ok) {
+        throw new Error("GeoGuessr activity feed unavailable")
+      }
+
+      const activity = await response.json()
+
+      if (isMounted) {
+        setGeoguessrActivity({
+          ...activity,
+          loading: false,
+          error: null,
+        })
+      }
+    } catch (error) {
+      if (isMounted) {
+        setGeoguessrActivity((current) => ({
+          ...current,
+          loading: false,
+          error: error.message,
+        }))
+      }
+    }
+  }
+
+  fetchActivity()
+
+  const interval = window.setInterval(fetchActivity, 10 * 60 * 1000)
+
+  return () => {
+    isMounted = false
+    window.clearInterval(interval)
+  }
+}, [])
   const [activeTab, setActiveTab] = useState("leaders")
 
   const [selectedTeam, setSelectedTeam] = useState("All")
@@ -588,7 +636,7 @@ const leagueStats = useMemo(() => {
 }, [filteredRawData, playerStats, teamStats])
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-white overflow-x-hidden">
+    <div className="min-h-screen bg-[#070b14] text-white overflow-x-hidden pb-24">
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_top_right,#1d4ed830,transparent_35%),radial-gradient(circle_at_bottom_left,#06b6d430,transparent_35%)] pointer-events-none" />
 
       <div className="relative z-10 p-4 sm:p-6 md:p-10">
@@ -622,6 +670,75 @@ const leagueStats = useMemo(() => {
         )}
         {activeTab === "players" && <PlayersTab playerStats={playerStats} dailyData={filteredDailyData} />}
         {activeTab === "daily" && <DailyChallengeTab dailyData={filteredDailyData} />}
+      </div>
+
+      <GeoGuessrActivityTicker activity={geoguessrActivity} />
+    </div>
+  )
+}
+
+function formatActivityTime(minutesAgo) {
+  if (!Number.isFinite(minutesAgo)) return "status unknown"
+  if (minutesAgo <= 1) return "just now"
+  if (minutesAgo < 60) return `${minutesAgo} min ago`
+
+  const hoursAgo = Math.round(minutesAgo / 60)
+  if (hoursAgo < 24) return `${hoursAgo} hr ago`
+
+  return `${Math.round(hoursAgo / 24)} d ago`
+}
+
+function GeoGuessrActivityTicker({ activity }) {
+  const activePlayers = activity.players.filter((player) => player.status === "active")
+  const hasActivePlayers = activePlayers.length > 0
+  const tickerPlayers = hasActivePlayers ? [...activePlayers, ...activePlayers] : []
+
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-red-400/20 bg-[#050812]/95 px-3 py-3 text-white shadow-[0_-18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+      <div className="mx-auto flex max-w-7xl items-center gap-3 overflow-hidden">
+        <span className={`activity-light h-3 w-3 shrink-0 rounded-full ${hasActivePlayers ? "bg-red-500" : "bg-slate-500"}`} />
+
+        <p className="shrink-0 text-xs font-black uppercase tracking-[0.2em] text-red-200">
+          Playing right now:
+        </p>
+
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <div className="activity-marquee flex w-max items-center gap-5">
+            {activity.loading && (
+              <span className="text-sm font-bold text-slate-400">Checking GeoGuessr activity...</span>
+            )}
+
+            {!activity.loading && activity.error && (
+              <span className="text-sm font-bold text-slate-400">Activity feed unavailable</span>
+            )}
+
+            {!activity.loading && !activity.error && !hasActivePlayers && (
+              <span className="text-sm font-bold text-slate-400">No players active in the last 10 minutes</span>
+            )}
+
+            {!activity.loading && !activity.error &&
+              tickerPlayers.map((player, index) => (
+                <a
+                  key={`${player.id}-${index}`}
+                  href={player.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="whitespace-nowrap text-sm font-black text-white transition-colors hover:text-cyan-300"
+                >
+                  {player.name}
+                  <span className="ml-2 text-xs font-bold text-slate-400">
+                    active {formatActivityTime(player.minutesAgo)}
+                  </span>
+                </a>
+              ))}
+          </div>
+        </div>
+
+        {activity.checkedAt && (
+          <p className="hidden shrink-0 text-xs font-bold text-slate-500 sm:block">
+            Checks every 10 min
+          </p>
+        )}
       </div>
     </div>
   )
@@ -1127,6 +1244,8 @@ function PlayersTab({ playerStats = [], dailyData = [] }) {
 }
 
 function PlayerProfileDetail({ player }) {
+  const [shareState, setShareState] = useState("idle")
+
   if (!player) {
     return (
       <div className="bg-white/5 border border-white/10 rounded-2xl p-6 text-slate-400">
@@ -1137,6 +1256,7 @@ function PlayerProfileDetail({ player }) {
 
   const brand = getTeamBrand(player.team)
   const daily = player.daily
+  const profileShareText = `${player.name} GeoCommand Profile: ${player.ctps} CTPs, ${player.defensivePins} Defensive Pins, ${player.kos} KOs, ${formatDistance(player.avgDistance)} season avg.`
   const regionRanks = Object.entries(player.regions || {})
     .map(([name, data]) => ({
       name,
@@ -1144,6 +1264,31 @@ function PlayerProfileDetail({ player }) {
       avgDistance: data.totalDistance / data.count,
     }))
     .sort((a, b) => a.avgDistance - b.avgDistance)
+
+  async function shareProfile() {
+    const shareData = {
+      title: `${player.name} GeoCommand Profile`,
+      text: profileShareText,
+      url: window.location.href,
+    }
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData)
+      } else {
+        await navigator.clipboard.writeText(`${profileShareText} ${window.location.href}`)
+      }
+
+      setShareState("shared")
+      window.setTimeout(() => setShareState("idle"), 1800)
+    } catch (error) {
+      if (error.name === "AbortError") return
+
+      await navigator.clipboard.writeText(`${profileShareText} ${window.location.href}`)
+      setShareState("copied")
+      window.setTimeout(() => setShareState("idle"), 1800)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -1164,6 +1309,15 @@ function PlayerProfileDetail({ player }) {
               <p className="text-slate-400 mt-3 text-sm sm:text-base">
                 {player.consistency} season profile with {player.ctps} CTPs, {player.defensivePins} Defensive Pins, and {player.kos} KOs.
               </p>
+
+              <button
+                type="button"
+                onClick={shareProfile}
+                className="mt-5 inline-flex items-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-black text-cyan-200 transition-all hover:bg-cyan-400/20"
+              >
+                {shareState === "idle" ? <Share2 className="h-4 w-4" /> : shareState === "shared" ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {shareState === "idle" ? "Share Profile" : shareState === "shared" ? "Shared" : "Copied"}
+              </button>
             </div>
           </div>
 
@@ -1269,36 +1423,65 @@ function PlayerHeadToHead({
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 gap-3">
-        <select
-          value={selectedPlayerName}
-          onChange={(event) => setSelectedPlayerName(event.target.value)}
-          className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white"
-        >
-          {players.map((player) => (
-            <option key={player.name} value={player.name}>
-              {player.name}
-            </option>
-          ))}
-        </select>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label className="space-y-2">
+            <span className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em]">
+              Player A
+            </span>
+            <select
+              value={selectedPlayerName}
+              onChange={(event) => setSelectedPlayerName(event.target.value)}
+              className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white w-full"
+            >
+              {players.map((player) => (
+                <option key={player.name} value={player.name}>
+                  {player.name}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <select
-          value={comparePlayerName}
-          onChange={(event) => setComparePlayerName(event.target.value)}
-          className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white"
-        >
-          {players.map((player) => (
-            <option key={player.name} value={player.name}>
-              {player.name}
-            </option>
-          ))}
-        </select>
+          <label className="space-y-2">
+            <span className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em]">
+              Player B
+            </span>
+            <select
+              value={comparePlayerName}
+              onChange={(event) => setComparePlayerName(event.target.value)}
+              className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white w-full"
+            >
+              {players.map((player) => (
+                <option key={player.name} value={player.name}>
+                  {player.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-[1.15fr_1fr_1fr] gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.18em]">
+          Metric
+        </p>
+
+        {[selectedPlayer, comparisonPlayer].map((player, index) => (
+          <div key={player?.name || index} className="min-w-0">
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.18em]">
+              Player {index === 0 ? "A" : "B"}
+            </p>
+            <p className="mt-1 truncate text-sm font-black text-white">
+              {player?.name || "Choose"}
+            </p>
+          </div>
+        ))}
       </div>
 
       <div className="space-y-3">
         {metrics.map((metric) => (
           <div key={metric.label} className="bg-white/5 rounded-2xl p-4 border border-white/10">
-            <p className="text-slate-500 text-sm mb-2">{metric.label}</p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-[1.15fr_1fr_1fr] gap-3 items-center">
+              <p className="text-slate-500 text-sm font-bold">{metric.label}</p>
               <p className={`text-xl font-black ${winnerClass(metric, "a")}`}>
                 {metric.format(metric.a)}
               </p>
