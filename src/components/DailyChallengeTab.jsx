@@ -10,6 +10,7 @@ import {
   formatPercent,
   formatScore,
   isYes,
+  parseDistance,
 } from "../data/stats.js"
 
 export default function DailyChallengeTab({ dailyData = [] }) {
@@ -18,6 +19,16 @@ export default function DailyChallengeTab({ dailyData = [] }) {
   const [compareA, setCompareA] = useState("")
   const [compareB, setCompareB] = useState("")
   const [mapMetric, setMapMetric] = useState("distance")
+  const shameRows = useMemo(() => {
+    return dailyData
+      .map((row) => ({
+        ...row,
+        shameDistance: parseDistance(row["Distance (km)"]),
+      }))
+      .filter((row) => row.Player && row.shameDistance > 0)
+      .sort((a, b) => b.shameDistance - a.shameDistance)
+      .slice(0, 5)
+  }, [dailyData])
 
   const countryHits = dailyData.filter((row) => isYes(row["Country Hit"])).length
   const regionHits = dailyData.filter((row) => isYes(row["Region Hit"])).length
@@ -130,42 +141,51 @@ export default function DailyChallengeTab({ dailyData = [] }) {
       </div>
 
       <Panel>
-        <PanelHeader eyebrow="Daily Feed" title="Recent Daily Results" right="Live" />
+        <PanelHeader eyebrow="Lowlight Reel" title="Wall of Shame" right="Worst 5 by Distance" />
 
-        <div className="space-y-3">
-          {dailyData.slice(0, 12).map((row, index) => (
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-3 sm:gap-4">
+          {shameRows.map((row, index) => (
             <div
-              key={index}
-              className="grid grid-cols-2 md:grid-cols-6 gap-3 md:gap-4 items-center bg-white/5 rounded-2xl p-4 border border-white/10"
+              key={`${row.Player}-${row.Country}-${row.Region}-${row.shameDistance}-${index}`}
+              className="interactive-card rounded-2xl border border-pink-400/20 bg-pink-500/10 p-4 sm:p-5 shadow-2xl"
             >
-              <div>
-                <p className="text-slate-500 text-xs">Player</p>
-                <p className="font-bold">{row.Player}</p>
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-pink-300 text-xs font-black uppercase tracking-[0.2em]">
+                    #{index + 1} Offender
+                  </p>
+                  <h3 className="mt-2 text-xl font-black leading-tight">{row.Player}</h3>
+                </div>
+
+                <p className="rounded-xl border border-pink-300/20 bg-pink-300/10 px-3 py-2 text-sm font-black text-pink-200">
+                  {formatDistance(row.shameDistance)}
+                </p>
               </div>
 
-              <div>
-                <p className="text-slate-500 text-xs">Country</p>
-                <p className="font-bold">{row.Country}</p>
-              </div>
+              <p className="text-sm font-bold text-slate-200">
+                {getShameCaption(row, index)}
+              </p>
 
-              <div>
-                <p className="text-slate-500 text-xs">Region</p>
-                <p className="font-bold">{row.Region}</p>
-              </div>
+              <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-slate-500 text-xs">Target</p>
+                  <p className="font-bold">{row.Country || "Unknown"}</p>
+                </div>
 
-              <div>
-                <p className="text-slate-500 text-xs">Distance</p>
-                <p className="font-bold text-cyan-400">{row["Distance (km)"]} km</p>
-              </div>
+                <div>
+                  <p className="text-slate-500 text-xs">Region</p>
+                  <p className="font-bold">{row.Region || "Unknown"}</p>
+                </div>
 
-              <div>
-                <p className="text-slate-500 text-xs">Time</p>
-                <p className="font-bold">{row["Time/Guess"]}</p>
-              </div>
+                <div>
+                  <p className="text-slate-500 text-xs">Time</p>
+                  <p className="font-bold">{row["Time/Guess"] || "N/A"}</p>
+                </div>
 
-              <div>
-                <p className="text-slate-500 text-xs">Mode</p>
-                <p className="font-bold">{row.Mode}</p>
+                <div>
+                  <p className="text-slate-500 text-xs">Score</p>
+                  <p className="font-bold">{row.Score || "0"}</p>
+                </div>
               </div>
             </div>
           ))}
@@ -173,6 +193,20 @@ export default function DailyChallengeTab({ dailyData = [] }) {
       </Panel>
     </>
   )
+}
+
+function getShameCaption(row, index) {
+  const country = row.Country || "the target"
+  const region = row.Region || "the map"
+  const captions = [
+    `Tried to find ${country}, found character development instead.`,
+    `${region} filed a missing-person report for this guess.`,
+    `The pin was placed with confidence, which is honestly the funniest part.`,
+    `A bold interpretation of ${country}. Geography disagreed immediately.`,
+    `This one had the energy of opening the map and choosing vibes.`,
+  ]
+
+  return captions[index] || `A guess so adventurous it should come with a travel waiver.`
 }
 
 function DailyComparison({

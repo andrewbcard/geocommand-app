@@ -1397,8 +1397,9 @@ function PlayerProfileDetail({ player, shareTargetRef }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 w-full lg:w-auto lg:min-w-64">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full lg:w-auto lg:min-w-[24rem]">
             <MiniStat label="Season Avg" value={formatDistance(player.avgDistance)} accent="text-cyan-400" />
+            <MiniStat label="CTPs" value={player.ctps} accent="text-emerald-400" />
             <MiniStat label="Defensive Pins" value={player.defensivePins} accent="text-cyan-400" />
           </div>
         </div>
