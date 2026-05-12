@@ -86,6 +86,77 @@ export default function DailyChallengeTab({ dailyData = [] }) {
       </div>
 
       <Panel className="mb-6 sm:mb-8">
+        <PanelHeader eyebrow="Lowlight Reel" title="Wall of Shame" right="Worst 5 by Distance (all-time)" />
+
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-3 sm:gap-4">
+          {shameRows.map((row, index) => (
+            <div
+              key={`${row.Player}-${row.Country}-${row.Region}-${row.shameDistance}-${index}`}
+              className="interactive-card rounded-2xl border border-pink-400/20 bg-pink-500/10 p-4 sm:p-5 shadow-2xl"
+            >
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-pink-300 text-xs font-black uppercase tracking-[0.2em]">
+                    #{index + 1} Offender
+                  </p>
+                  <h3 className="mt-2 text-xl font-black leading-tight">{row.Player}</h3>
+                </div>
+
+                <p className="rounded-xl border border-pink-300/20 bg-pink-300/10 px-3 py-2 text-sm font-black text-pink-200">
+                  {formatDistance(row.shameDistance)}
+                </p>
+              </div>
+
+              <p className="text-sm font-bold text-slate-200">
+                {getShameCaption(row, index)}
+              </p>
+
+              <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-slate-500 text-xs">Guessed Country</p>
+                  <p className="font-bold">{row.Country || "Unknown"}</p>
+                </div>
+
+                <div>
+                  <p className="text-slate-500 text-xs">Guessed Region</p>
+                  <p className="font-bold">{row.Region || "Unknown"}</p>
+                </div>
+
+                <div>
+                  <p className="text-slate-500 text-xs">Time</p>
+                  <p className="font-bold">{row["Time/Guess"] || "N/A"}</p>
+                </div>
+
+                <div>
+                  <p className="text-slate-500 text-xs">Score</p>
+                  <p className="font-bold">{row.Score || "0"}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Panel>
+
+      <Panel className="mb-6 sm:mb-8">
+        <PanelHeader eyebrow="Head-to-Head" title="Player Comparison" right="Daily Challenge" />
+        <DailyComparison
+          playerStats={playerStats}
+          compareA={firstComparePlayer}
+          compareB={secondComparePlayer}
+          setCompareA={setCompareA}
+          setCompareB={setCompareB}
+          playerA={comparePlayerA}
+          playerB={comparePlayerB}
+        />
+      </Panel>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        {playerStats.map((player) => (
+          <DailyPlayerCard key={player.name} player={player} />
+        ))}
+      </div>
+
+      <Panel>
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5 sm:mb-6">
           <PanelHeader
             eyebrow="Daily Map"
@@ -120,90 +191,19 @@ export default function DailyChallengeTab({ dailyData = [] }) {
 
         <GeoHeatMap regionStats={regionStats} metric={mapMetric} />
       </Panel>
-
-      <Panel className="mb-6 sm:mb-8">
-        <PanelHeader eyebrow="Head-to-Head" title="Player Comparison" right="Daily Challenge" />
-        <DailyComparison
-          playerStats={playerStats}
-          compareA={firstComparePlayer}
-          compareB={secondComparePlayer}
-          setCompareA={setCompareA}
-          setCompareB={setCompareB}
-          playerA={comparePlayerA}
-          playerB={comparePlayerB}
-        />
-      </Panel>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-        {playerStats.map((player) => (
-          <DailyPlayerCard key={player.name} player={player} />
-        ))}
-      </div>
-
-      <Panel>
-        <PanelHeader eyebrow="Lowlight Reel" title="Wall of Shame" right="Worst 5 by Distance" />
-
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-3 sm:gap-4">
-          {shameRows.map((row, index) => (
-            <div
-              key={`${row.Player}-${row.Country}-${row.Region}-${row.shameDistance}-${index}`}
-              className="interactive-card rounded-2xl border border-pink-400/20 bg-pink-500/10 p-4 sm:p-5 shadow-2xl"
-            >
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-pink-300 text-xs font-black uppercase tracking-[0.2em]">
-                    #{index + 1} Offender
-                  </p>
-                  <h3 className="mt-2 text-xl font-black leading-tight">{row.Player}</h3>
-                </div>
-
-                <p className="rounded-xl border border-pink-300/20 bg-pink-300/10 px-3 py-2 text-sm font-black text-pink-200">
-                  {formatDistance(row.shameDistance)}
-                </p>
-              </div>
-
-              <p className="text-sm font-bold text-slate-200">
-                {getShameCaption(row, index)}
-              </p>
-
-              <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-slate-500 text-xs">Target</p>
-                  <p className="font-bold">{row.Country || "Unknown"}</p>
-                </div>
-
-                <div>
-                  <p className="text-slate-500 text-xs">Region</p>
-                  <p className="font-bold">{row.Region || "Unknown"}</p>
-                </div>
-
-                <div>
-                  <p className="text-slate-500 text-xs">Time</p>
-                  <p className="font-bold">{row["Time/Guess"] || "N/A"}</p>
-                </div>
-
-                <div>
-                  <p className="text-slate-500 text-xs">Score</p>
-                  <p className="font-bold">{row.Score || "0"}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Panel>
     </>
   )
 }
 
 function getShameCaption(row, index) {
-  const country = row.Country || "the target"
-  const region = row.Region || "the map"
+  const country = row.Country || "that country"
+  const region = row.Region || "that region"
   const captions = [
-    `Tried to find ${country}, found character development instead.`,
-    `${region} filed a missing-person report for this guess.`,
+    `Guessed ${country}, and the map responded with a very loud "absolutely not."`,
+    `Picked ${region}, which is less a location read and more a cry for help.`,
     `The pin was placed with confidence, which is honestly the funniest part.`,
-    `A bold interpretation of ${country}. Geography disagreed immediately.`,
-    `This one had the energy of opening the map and choosing vibes.`,
+    `A bold ${country} call. Geography disagreed immediately and with evidence.`,
+    `This one had the energy of opening the map and choosing vibes over facts.`,
   ]
 
   return captions[index] || `A guess so adventurous it should come with a travel waiver.`
