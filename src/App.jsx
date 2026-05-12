@@ -415,12 +415,13 @@ const teamStats = useMemo(() => {
   const map = {};
 
   filteredRawData.forEach((row) => {
-    const player = normalizePlayerName(row["CTP Player"]);
-    const team = currentPlayerTeams[player] || normalizeTeamName(row["CTP Team"]);
+    const team = normalizeTeamName(row["CTP Team"]);
     const distance = parseFloat(row["CTP Distance (km)"]) || 0;
     const ko = row["Knockout Punch"];
     const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
-    const defensiveTeam = currentPlayerTeams[defensivePlayer];
+    const defensiveTeam =
+      normalizeTeamName(getSheetValue(row, ["2nd CTP Team", "Second CTP Team", "Defensive Team"])) ||
+      currentPlayerTeams[defensivePlayer];
     const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
 
     if (!team) return;
@@ -640,17 +641,13 @@ const liveMatches = useMemo(() => {
     .filter((row) => row["Match"] && row["Game"])
     .slice(-12)
     .reverse()
-    .map((row) => {
-      const player = normalizePlayerName(row["CTP Player"])
-
-      return {
-        winner: currentPlayerTeams[player] || normalizeTeamName(row["CTP Team"]) || "Unknown",
-        loser: "Field",
-        score: `${row["CTP Player"] || "Unknown"} • ${row["CTP Distance (km)"] || "0"} km`,
-        status: row["Knockout Punch"] && row["Knockout Punch"] !== "-" ? "KO" : "CTP",
-      }
-    });
-}, [currentPlayerTeams, filteredRawData]);
+    .map((row) => ({
+      winner: normalizeTeamName(row["CTP Team"]) || "Unknown",
+      loser: "Field",
+      score: `${row["CTP Player"] || "Unknown"} • ${row["CTP Distance (km)"] || "0"} km`,
+      status: row["Knockout Punch"] && row["Knockout Punch"] !== "-" ? "KO" : "CTP",
+    }));
+}, [filteredRawData]);
 
 const liveRegions = useMemo(() => {
   return regionStats.map((region, index) => ({
