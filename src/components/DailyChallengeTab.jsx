@@ -8,6 +8,7 @@ import {
   formatDistance,
   formatDuration,
   formatPercent,
+  formatScore,
   isYes,
 } from "../data/stats.js"
 
@@ -253,45 +254,141 @@ function DailyComparison({
 }
 
 function DailyPlayerTable({ playerStats = [] }) {
+  const columns = useMemo(() => [
+    { key: "name", label: "Player", type: "text", defaultDirection: "asc" },
+    { key: "guesses", label: "Guesses", defaultDirection: "desc" },
+    { key: "countryHitRate", label: "Country Hit", defaultDirection: "desc", format: formatPercent },
+    { key: "regionHitRate", label: "Region Hit", defaultDirection: "desc", format: formatPercent },
+    { key: "avgGuessTime", label: "Time/Guess", defaultDirection: "asc", format: formatDuration },
+    { key: "avgScore", label: "Avg Location Score", defaultDirection: "desc", format: formatScore },
+    { key: "avgDistance", label: "Avg Distance", defaultDirection: "asc", format: formatDistance },
+  ], [])
+  const [sortConfig, setSortConfig] = useState({ key: "avgDistance", direction: "asc" })
+
+  const sortedPlayers = useMemo(() => {
+    const column = columns.find((item) => item.key === sortConfig.key)
+    const direction = sortConfig.direction === "asc" ? 1 : -1
+
+    return [...playerStats].sort((a, b) => {
+      if (column?.type === "text") {
+        return a.name.localeCompare(b.name) * direction
+      }
+
+      const first = Number.isFinite(a[sortConfig.key]) ? a[sortConfig.key] : 0
+      const second = Number.isFinite(b[sortConfig.key]) ? b[sortConfig.key] : 0
+      return (first - second) * direction
+    })
+  }, [columns, playerStats, sortConfig])
+
+  function updateSort(column) {
+    setSortConfig((current) => {
+      if (current.key === column.key) {
+        return {
+          key: column.key,
+          direction: current.direction === "asc" ? "desc" : "asc",
+        }
+      }
+
+      return {
+        key: column.key,
+        direction: column.defaultDirection,
+      }
+    })
+  }
+
+  function sortLabel(column) {
+    if (sortConfig.key !== column.key) return ""
+    return sortConfig.direction === "asc" ? " (asc)" : " (desc)"
+  }
+
   return (
     <>
-      <div className="hidden md:grid grid-cols-5 text-slate-500 text-sm border-b border-white/10 pb-3 px-4">
-        <div>Player</div>
-        <div>Guesses</div>
-        <div>Country Hit</div>
-        <div>Region Hit</div>
-        <div>Avg Distance</div>
+      <div className="mb-4 flex gap-2 md:hidden">
+        <select
+          value={sortConfig.key}
+          onChange={(event) => {
+            const column = columns.find((item) => item.key === event.target.value)
+            setSortConfig({
+              key: column.key,
+              direction: column.defaultDirection,
+            })
+          }}
+          className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#0f172a] px-3 py-3 text-sm font-bold text-white"
+        >
+          {columns.map((column) => (
+            <option key={column.key} value={column.key}>
+              Sort by {column.label}
+            </option>
+          ))}
+        </select>
+
+        <button
+          type="button"
+          onClick={() => setSortConfig((current) => ({
+            ...current,
+            direction: current.direction === "asc" ? "desc" : "asc",
+          }))}
+          className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm font-black text-cyan-200"
+        >
+          {sortConfig.direction === "asc" ? "Asc" : "Desc"}
+        </button>
       </div>
 
-      <div className="space-y-3 mt-4">
-        {playerStats.map((player, index) => (
-          <div key={player.name} className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border border-white/10">
-            <div className="flex items-center gap-3">
-              <PlayerAvatar playerName={player.name} className="h-12 w-12" />
+      <div className="overflow-x-auto">
+        <div className="md:min-w-[1120px]">
+        <div className="hidden md:grid grid-cols-[1.55fr_0.7fr_0.9fr_0.9fr_0.9fr_1.15fr_1fr] gap-4 text-slate-500 text-sm border-b border-white/10 pb-3 px-4">
+          {columns.map((column) => (
+            <button
+              key={column.key}
+              type="button"
+              onClick={() => updateSort(column)}
+              className="text-left font-bold transition-colors hover:text-white"
+            >
+              {column.label}
+              {sortLabel(column)}
+            </button>
+          ))}
+        </div>
 
-              <div className="min-w-0">
-                <p className="font-black truncate">#{index + 1} {player.name}</p>
-                <p className="text-slate-500 text-xs md:hidden">{player.guesses} guesses</p>
+        <div className="space-y-3 mt-4">
+          {sortedPlayers.map((player, index) => (
+            <div key={player.name} className="grid grid-cols-2 md:grid-cols-[1.55fr_0.7fr_0.9fr_0.9fr_0.9fr_1.15fr_1fr] gap-3 md:gap-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border border-white/10">
+              <div className="flex items-center gap-3">
+                <PlayerAvatar playerName={player.name} className="h-12 w-12" />
+
+                <div className="min-w-0">
+                  <p className="font-black truncate">#{index + 1} {player.name}</p>
+                  <p className="text-slate-500 text-xs md:hidden">{player.guesses} guesses</p>
+                </div>
+              </div>
+              <div className="font-semibold">
+                <span className="md:hidden block text-slate-500 text-xs">Guesses</span>
+                {player.guesses}
+              </div>
+              <div className="text-purple-300 font-bold">
+                <span className="md:hidden block text-slate-500 text-xs">Country Hit</span>
+                {formatPercent(player.countryHitRate)}
+              </div>
+              <div className="text-pink-300 font-bold">
+                <span className="md:hidden block text-slate-500 text-xs">Region Hit</span>
+                {formatPercent(player.regionHitRate)}
+              </div>
+              <div className="text-emerald-300 font-bold">
+                <span className="md:hidden block text-slate-500 text-xs">Time/Guess</span>
+                {formatDuration(player.avgGuessTime)}
+              </div>
+              <div className="text-amber-300 font-bold">
+                <span className="md:hidden block text-slate-500 text-xs">Avg Location Score</span>
+                {formatScore(player.avgScore)}
+              </div>
+              <div className="text-cyan-300 font-black">
+                <span className="md:hidden block text-slate-500 text-xs">Avg Distance</span>
+                {formatDistance(player.avgDistance)}
               </div>
             </div>
-            <div className="font-semibold">
-              <span className="md:hidden block text-slate-500 text-xs">Guesses</span>
-              {player.guesses}
-            </div>
-            <div className="text-purple-300 font-bold">
-              <span className="md:hidden block text-slate-500 text-xs">Country Hit</span>
-              {formatPercent(player.countryHitRate)}
-            </div>
-            <div className="text-pink-300 font-bold">
-              <span className="md:hidden block text-slate-500 text-xs">Region Hit</span>
-              {formatPercent(player.regionHitRate)}
-            </div>
-            <div className="text-cyan-300 font-black">
-              <span className="md:hidden block text-slate-500 text-xs">Avg Distance</span>
-              {formatDistance(player.avgDistance)}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
+        </div>
       </div>
     </>
   )

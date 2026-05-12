@@ -2,9 +2,13 @@ export function isYes(value) {
   return String(value || "").trim().toLowerCase() === "yes"
 }
 
+export function parseNumber(value) {
+  const number = Number.parseFloat(String(value || "").replace(/,/g, ""))
+  return Number.isFinite(number) ? number : 0
+}
+
 export function parseDistance(value) {
-  const distance = Number.parseFloat(value)
-  return Number.isFinite(distance) ? distance : 0
+  return parseNumber(value)
 }
 
 export function formatPercent(value) {
@@ -47,6 +51,11 @@ export function formatDuration(seconds) {
   }
 
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`
+}
+
+export function formatScore(value) {
+  if (!Number.isFinite(value)) return "0"
+  return Math.round(value).toLocaleString()
 }
 
 export function getBestAndWeakestRegion(regions) {
@@ -98,6 +107,7 @@ export function buildDailyPlayerStats(dailyRows) {
     const region = row.Region
     const distance = parseDistance(row["Distance (km)"])
     const guessTime = parseGuessTime(row["Time/Guess"])
+    const score = parseNumber(row.Score)
 
     if (!player) return
 
@@ -109,6 +119,7 @@ export function buildDailyPlayerStats(dailyRows) {
         regionHits: 0,
         totalDistance: 0,
         totalGuessTime: 0,
+        totalScore: 0,
         regions: {},
       }
     }
@@ -116,6 +127,7 @@ export function buildDailyPlayerStats(dailyRows) {
     map[player].guesses += 1
     map[player].totalDistance += distance
     map[player].totalGuessTime += guessTime
+    map[player].totalScore += score
 
     if (isYes(row["Country Hit"])) map[player].countryHits += 1
     if (isYes(row["Region Hit"])) map[player].regionHits += 1
@@ -141,6 +153,7 @@ export function buildDailyPlayerStats(dailyRows) {
         ...player,
         avgDistance: player.totalDistance / player.guesses,
         avgGuessTime: player.totalGuessTime / player.guesses,
+        avgScore: player.totalScore / player.guesses,
         countryHitRate: (player.countryHits / player.guesses) * 100,
         regionHitRate: (player.regionHits / player.guesses) * 100,
         ...regionRanks,

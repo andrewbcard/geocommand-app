@@ -1264,6 +1264,28 @@ function PlayersTab({ playerStats = [], dailyData = [] }) {
   )
 }
 
+function buildPlayerProfileBlurb(player, daily, regionRanks) {
+  const bestRegion = regionRanks[0]?.name || player.bestRegion || "the safer parts of the map"
+  const weakestRegion = regionRanks[regionRanks.length - 1]?.name || player.recentForm?.weakestRegion || "the danger zone"
+  const dailyDistance = Number.isFinite(daily?.avgDistance)
+    ? formatDistance(daily.avgDistance)
+    : "not enough daily data yet"
+  const countryHit = Number.isFinite(daily?.countryHitRate) ? formatPercent(daily.countryHitRate) : "0%"
+  const regionHit = Number.isFinite(daily?.regionHitRate) ? formatPercent(daily.regionHitRate) : "0%"
+  const ctpGap = player.ctps - player.defensivePins
+
+  const statStyle =
+    player.defensivePins > player.ctps
+      ? `The Defensive Pins are doing a lot of heavy lifting here, which is either discipline or a very stylish refusal to be first.`
+      : ctpGap <= 5
+      ? `The CTP and Defensive Pins counts are basically side-eyeing each other, so this profile is more balanced than it wants to admit.`
+      : player.kos >= 5
+      ? `The KO count adds some bite, because apparently quietly being accurate was not dramatic enough.`
+      : `The stat line leans more precision than chaos, a respectable choice even if chaos has better marketing.`
+
+  return `${player.name} is strongest in ${bestRegion} and needs to keep an eye on ${weakestRegion}, where the map has been a little less friendly. Daily Challenge form sits at ${dailyDistance} with ${countryHit} country hits and ${regionHit} region hits. ${statStyle}`
+}
+
 function PlayerProfileDetail({ player, shareTargetRef }) {
   const [shareState, setShareState] = useState("idle")
 
@@ -1285,6 +1307,7 @@ function PlayerProfileDetail({ player, shareTargetRef }) {
       avgDistance: data.totalDistance / data.count,
     }))
     .sort((a, b) => a.avgDistance - b.avgDistance)
+  const profileBlurb = buildPlayerProfileBlurb(player, daily, regionRanks)
 
   async function shareProfileImage() {
     try {
@@ -1350,6 +1373,9 @@ function PlayerProfileDetail({ player, shareTargetRef }) {
               <h3 className="text-3xl sm:text-5xl font-black break-words">{player.name}</h3>
               <p className="text-slate-400 mt-3 text-sm sm:text-base">
                 {player.consistency} season profile with {player.ctps} CTPs, {player.defensivePins} Defensive Pins, and {player.kos} KOs.
+              </p>
+              <p className="mt-4 max-w-3xl text-sm sm:text-base leading-7 text-slate-300">
+                {profileBlurb}
               </p>
 
               <button
