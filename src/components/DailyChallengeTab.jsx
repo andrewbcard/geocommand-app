@@ -11,6 +11,7 @@ import {
   formatScore,
   isYes,
   parseDistance,
+  parseNumber,
 } from "../data/stats.js"
 
 export default function DailyChallengeTab({ dailyData = [] }) {
@@ -29,6 +30,7 @@ export default function DailyChallengeTab({ dailyData = [] }) {
       .sort((a, b) => b.shameDistance - a.shameDistance)
       .slice(0, 5)
   }, [dailyData])
+  const fiveKPlayers = useMemo(() => buildFiveKClub(dailyData), [dailyData])
 
   const countryHits = dailyData.filter((row) => isYes(row["Country Hit"])).length
   const regionHits = dailyData.filter((row) => isYes(row["Region Hit"])).length
@@ -84,6 +86,68 @@ export default function DailyChallengeTab({ dailyData = [] }) {
           <DailyRegionList regionStats={regionStats} />
         </Panel>
       </div>
+
+      <Panel className="mb-6 sm:mb-8">
+        <PanelHeader eyebrow="Perfect Pins" title="5k Club" right="Perfect Scores" />
+
+        {fiveKPlayers.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 sm:gap-4">
+            {fiveKPlayers.map((player, index) => (
+              <div
+                key={player.name}
+                className="interactive-card rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 sm:p-5 shadow-2xl"
+              >
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <PlayerAvatar playerName={player.name} className="h-12 w-12" />
+
+                    <div className="min-w-0">
+                      <p className="text-emerald-300 text-xs font-black uppercase tracking-[0.2em]">
+                        #{index + 1} Certified
+                      </p>
+                      <h3 className="mt-1 text-xl font-black leading-tight truncate">{player.name}</h3>
+                    </div>
+                  </div>
+
+                  <p className="rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-sm font-black text-emerald-200">
+                    {player.count}x
+                  </p>
+                </div>
+
+                <p className="text-sm font-bold text-slate-200">
+                  {getFiveKCaption(player, index)}
+                </p>
+
+                <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-slate-500 text-xs">5ks</p>
+                    <p className="font-bold text-emerald-300">{player.count}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-slate-500 text-xs">Most Recent</p>
+                    <p className="font-bold">{player.mostRecentLabel}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-slate-500 text-xs">Last Guess</p>
+                    <p className="font-bold">{player.mostRecentCountry || "Unknown"}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-slate-500 text-xs">Score</p>
+                    <p className="font-bold">{formatScore(5000)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm font-bold text-slate-400">
+            No 5ks recorded yet. The velvet rope remains deeply unimpressed.
+          </div>
+        )}
+      </Panel>
 
       <Panel className="mb-6 sm:mb-8">
         <PanelHeader eyebrow="Lowlight Reel" title="Wall of Shame" right="Worst 5 by Distance (all-time)" />
@@ -207,6 +271,82 @@ function getShameCaption(row, index) {
   ]
 
   return captions[index] || `A guess so adventurous it should come with a travel waiver.`
+}
+
+function parseDailyDate(value) {
+  const raw = String(value || "").trim()
+  if (!raw) return 0
+
+  const slashParts = raw.split("/").map(Number)
+  if (slashParts.length === 3 && slashParts.every(Number.isFinite)) {
+    const [month, day, year] = slashParts
+    const fullYear = year < 100 ? 2000 + year : year
+    return new Date(fullYear, month - 1, day).getTime()
+  }
+
+  const parsed = Date.parse(raw)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function formatDailyDate(value) {
+  if (!Number.isFinite(value) || value <= 0) return "Unknown"
+
+  return new Date(value).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
+function buildFiveKClub(dailyData) {
+  const players = {}
+
+  dailyData.forEach((row, index) => {
+    if (parseNumber(row.Score) !== 5000) return
+
+    const name = row.Player
+    if (!name) return
+
+    const dateValue = parseDailyDate(row.Date)
+    const sortValue = dateValue || index
+
+    if (!players[name]) {
+      players[name] = {
+        name,
+        count: 0,
+        mostRecentSortValue: 0,
+        mostRecentDateValue: 0,
+        mostRecentCountry: "",
+      }
+    }
+
+    players[name].count += 1
+
+    if (sortValue >= players[name].mostRecentSortValue) {
+      players[name].mostRecentSortValue = sortValue
+      players[name].mostRecentDateValue = dateValue
+      players[name].mostRecentCountry = row.Country || ""
+    }
+  })
+
+  return Object.values(players)
+    .map((player) => ({
+      ...player,
+      mostRecentLabel: formatDailyDate(player.mostRecentDateValue),
+    }))
+    .sort((a, b) => b.count - a.count || b.mostRecentSortValue - a.mostRecentSortValue || a.name.localeCompare(b.name))
+}
+
+function getFiveKCaption(player, index) {
+  const captions = [
+    `${player.name} has entered the sacred 5k airspace ${player.count} time${player.count === 1 ? "" : "s"}. Please speak softly around this level of map violence.`,
+    `${player.count} perfect score${player.count === 1 ? "" : "s"} on the board. The rest of the league may now pretend they were also "pretty close."`,
+    `Another member of the tiny-dot aristocracy. ${player.name} saw the road, read the signs, and chose perfection like it was casual.`,
+    `${player.name} has proof that sometimes the pin actually goes where the ego says it should.`,
+    `A clean 5k resume and absolutely no need to apologize for it. Horrible news for everyone keeping score at home.`,
+  ]
+
+  return captions[index % captions.length]
 }
 
 function DailyComparison({
