@@ -70,6 +70,15 @@ function parseSheetDate(value) {
   return new Date(fullYear, month - 1, day).getTime()
 }
 
+function getSheetValue(row, labels) {
+  const normalizedLabels = labels.map((label) => label.toLowerCase())
+  const entry = Object.entries(row).find(([key]) =>
+    normalizedLabels.includes(String(key || "").trim().toLowerCase())
+  )
+
+  return entry?.[1] || ""
+}
+
 function getTeamBrand(teamName) {
   if (!teamName) return TEAM_BRANDING.Lats
 
@@ -84,6 +93,7 @@ function getTeamBrand(teamName) {
 export default function App() {
   const [rawData, setRawData] = useState([]);
 const [dailyData, setDailyData] = useState([]);
+const [playerInfoData, setPlayerInfoData] = useState([]);
 const [geoguessrActivity, setGeoguessrActivity] = useState({
   players: [],
   checkedAt: null,
@@ -96,6 +106,9 @@ const RAW_DATA_URL =
 
 const DAILY_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vQeSSeiTso_obYVNbArRVNpz2PBW5LuQ24dEDMG0kdBH4axSCAajaP6_GTbBENbyRraoOrXUE4Bjitj/pub?gid=1946076674&single=true&output=csv";
+
+const PLAYER_INFO_URL =
+  "https://docs.google.com/spreadsheets/d/1ev1Gw72evcdMUp-M1xSOEuZJiarnOK4NKxscPVQiXeY/gviz/tq?tqx=out:csv&sheet=Player%20Info";
 
 useEffect(() => {
   const hasData = (row) => Object.values(row).some((value) => String(value || "").trim())
@@ -118,6 +131,15 @@ useEffect(() => {
         setDailyData(results.data.filter(hasData));
       },
       error: () => setDailyData([]),
+    });
+
+    Papa.parse(freshUrl(PLAYER_INFO_URL), {
+      download: true,
+      header: true,
+      complete: (results) => {
+        setPlayerInfoData(results.data.filter(hasData));
+      },
+      error: () => setPlayerInfoData([]),
     });
   };
 
@@ -177,32 +199,23 @@ const [selectedModes, setSelectedModes] = useState([
   "No Move",
   "NMPZ",
 ])
-const filteredRawData = useMemo(() => {
-  return rawData.filter((row) => {
-    const teamMatches =
-      selectedTeam === "All" ||
-      normalizeTeamName(row["CTP Team"]) === selectedTeam
-
-    const mode = row["Mode"]
-
-    const modeMatches =
-      !mode || selectedModes.includes(mode)
-
-    return teamMatches && modeMatches
-  })
-}, [rawData, selectedTeam, selectedModes])
-
-const filteredDailyData = useMemo(() => {
-  return dailyData.filter((row) => {
-    const mode = row["Mode"]
-
-    return !mode || selectedModes.includes(mode)
-  })
-}, [dailyData, selectedModes])
-
 const currentPlayerTeams = useMemo(() => {
-  const latestTeams = {}
+  const infoTeams = {}
 
+  playerInfoData.forEach((row) => {
+    const player = normalizePlayerName(getSheetValue(row, ["Player", "Player Name", "Name"]))
+    const team = normalizeTeamName(getSheetValue(row, ["Current team", "Current Team"]))
+
+    if (player && team) {
+      infoTeams[player] = team
+    }
+  })
+
+  if (Object.keys(infoTeams).length > 0) {
+    return infoTeams
+  }
+
+  const latestTeams = {}
   rawData.forEach((row, index) => {
     const player = normalizePlayerName(row["CTP Player"])
     const team = normalizeTeamName(row["CTP Team"])
@@ -224,7 +237,32 @@ const currentPlayerTeams = useMemo(() => {
   return Object.fromEntries(
     Object.entries(latestTeams).map(([player, data]) => [player, data.team])
   )
-}, [rawData])
+}, [playerInfoData, rawData])
+
+const filteredRawData = useMemo(() => {
+  return rawData.filter((row) => {
+    const player = normalizePlayerName(row["CTP Player"])
+    const currentTeam = currentPlayerTeams[player] || normalizeTeamName(row["CTP Team"])
+    const teamMatches =
+      selectedTeam === "All" ||
+      currentTeam === selectedTeam
+
+    const mode = row["Mode"]
+
+    const modeMatches =
+      !mode || selectedModes.includes(mode)
+
+    return teamMatches && modeMatches
+  })
+}, [currentPlayerTeams, rawData, selectedTeam, selectedModes])
+
+const filteredDailyData = useMemo(() => {
+  return dailyData.filter((row) => {
+    const mode = row["Mode"]
+
+    return !mode || selectedModes.includes(mode)
+  })
+}, [dailyData, selectedModes])
 
 const playerStats = useMemo(() => {
   const map = {};
@@ -377,7 +415,8 @@ const teamStats = useMemo(() => {
   const map = {};
 
   filteredRawData.forEach((row) => {
-    const team = normalizeTeamName(row["CTP Team"]);
+    const player = normalizePlayerName(row["CTP Player"]);
+    const team = currentPlayerTeams[player] || normalizeTeamName(row["CTP Team"]);
     const distance = parseFloat(row["CTP Distance (km)"]) || 0;
     const ko = row["Knockout Punch"];
     const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
@@ -404,7 +443,7 @@ const teamStats = useMemo(() => {
       map[team].kos += 1;
     }
 
-    if (defensiveTeam) {
+    if (defensiveTeam && (selectedTeam === "All" || defensiveTeam === selectedTeam)) {
       if (!map[defensiveTeam]) {
         map[defensiveTeam] = {
           name: defensiveTeam,
@@ -429,7 +468,7 @@ const teamStats = useMemo(() => {
         team.defensivePins > 0 ? team.totalDefensiveDistance / team.defensivePins : 0,
     }))
     .sort((a, b) => b.ctps - a.ctps);
-}, [filteredRawData, currentPlayerTeams]);
+}, [currentPlayerTeams, filteredRawData, selectedTeam]);
 
 const regionStats = useMemo(() => {
   const map = {};
@@ -601,13 +640,17 @@ const liveMatches = useMemo(() => {
     .filter((row) => row["Match"] && row["Game"])
     .slice(-12)
     .reverse()
-    .map((row) => ({
-      winner: normalizeTeamName(row["CTP Team"]) || "Unknown",
-      loser: "Field",
-      score: `${row["CTP Player"] || "Unknown"} • ${row["CTP Distance (km)"] || "0"} km`,
-      status: row["Knockout Punch"] && row["Knockout Punch"] !== "-" ? "KO" : "CTP",
-    }));
-}, [filteredRawData]);
+    .map((row) => {
+      const player = normalizePlayerName(row["CTP Player"])
+
+      return {
+        winner: currentPlayerTeams[player] || normalizeTeamName(row["CTP Team"]) || "Unknown",
+        loser: "Field",
+        score: `${row["CTP Player"] || "Unknown"} • ${row["CTP Distance (km)"] || "0"} km`,
+        status: row["Knockout Punch"] && row["Knockout Punch"] !== "-" ? "KO" : "CTP",
+      }
+    });
+}, [currentPlayerTeams, filteredRawData]);
 
 const liveRegions = useMemo(() => {
   return regionStats.map((region, index) => ({
