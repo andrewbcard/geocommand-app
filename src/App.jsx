@@ -16,7 +16,7 @@ import {
 import DailyChallengeTab from "./components/DailyChallengeTab.jsx"
 import GeoHeatMap from "./components/GeoHeatMap.jsx"
 import { PlayerAvatar, TeamLogo } from "./components/LeagueIdentity.jsx"
-import { buildDailyPlayerStats, formatDistance, formatPercent, getDistanceTier } from "./data/stats.js"
+import { buildDailyPlayerStats, formatDistance, formatPercent, getDistanceTier, parseNumber } from "./data/stats.js"
 const TEAM_BRANDING = {
   Lats: {
     primary: "from-cyan-500 to-blue-500",
@@ -31,12 +31,27 @@ const TEAM_BRANDING = {
     border: "border-purple-400/30",
     accent: "text-purple-300",
   },
+
+  "Latitude Longorias": {
+    primary: "from-emerald-500 to-cyan-500",
+    glow: "shadow-emerald-500/20",
+    border: "border-emerald-400/30",
+    accent: "text-emerald-300",
+  },
 }
+
+const SEASON_OPTIONS = [
+  { id: "2", label: "Season 2", badge: "02" },
+  { id: "1", label: "Season 1", badge: "01" },
+  { id: "all", label: "All-Time", badge: "All" },
+]
+
 function normalizeTeamName(teamName) {
   const normalized = String(teamName || "").trim().replace(/\s+/g, " ")
   const lower = normalized.toLowerCase()
 
   if (lower.includes("bontswana")) return "Bontswana"
+  if (lower.includes("latitude longorias")) return "Latitude Longorias"
   if (lower.includes("lats")) return "Lats"
 
   return normalized
@@ -79,6 +94,40 @@ function getSheetValue(row, labels) {
   return entry?.[1] || ""
 }
 
+function getNumericSheetValue(row, labels) {
+  return parseNumber(getSheetValue(row, labels))
+}
+
+function normalizeSeasonId(value) {
+  const normalized = String(value || "").trim().toLowerCase()
+
+  if (!normalized) return ""
+  if (normalized === "1" || normalized === "s1" || normalized === "season 1") return "1"
+  if (normalized === "2" || normalized === "s2" || normalized === "season 2") return "2"
+
+  return normalized.replace(/^season\s+/i, "")
+}
+
+function getSeasonLabel(seasonId) {
+  return SEASON_OPTIONS.find((season) => season.id === seasonId)?.label || `Season ${seasonId}`
+}
+
+function getSeasonBadge(seasonId) {
+  return SEASON_OPTIONS.find((season) => season.id === seasonId)?.badge || seasonId
+}
+
+function rowMatchesSeason(row, selectedSeason, fallbackSeason = "1") {
+  if (selectedSeason === "all") return true
+
+  const season = normalizeSeasonId(getSheetValue(row, ["Season", "League Season"]))
+
+  return (season || fallbackSeason) === selectedSeason
+}
+
+function getModeValue(row) {
+  return getSheetValue(row, ["Mode", "Game Mode"])
+}
+
 function getTeamBrand(teamName) {
   if (!teamName) return TEAM_BRANDING.Lats
 
@@ -88,12 +137,143 @@ function getTeamBrand(teamName) {
     return TEAM_BRANDING.Bontswana
   }
 
+  if (normalized.includes("latitude longorias")) {
+    return TEAM_BRANDING["Latitude Longorias"]
+  }
+
   return TEAM_BRANDING.Lats
+}
+
+function cleanScoreboardText(value) {
+  return String(value ?? "").trim().replace(/\s+/g, " ")
+}
+
+function cleanScoreboardMetric(value) {
+  return cleanScoreboardText(value).replace(/^Mutliplier$/i, "Multiplier")
+}
+
+function stripTeamHeader(value) {
+  return cleanScoreboardText(value).replace(/^Teams\s+/i, "")
+}
+
+function looksNumeric(value) {
+  return /^-?[\d,.]+$/.test(cleanScoreboardText(value))
+}
+
+function formatScoreboardValue(value) {
+  const cleanValue = cleanScoreboardText(value)
+
+  if (!cleanValue) return "-"
+  if (!looksNumeric(cleanValue)) return cleanValue
+
+  const number = parseNumber(cleanValue)
+
+  return number.toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+  })
+}
+
+function parseTeamScoreboardRows(rows = []) {
+  const rowArrays = rows
+    .map((row) => (Array.isArray(row) ? row : Object.values(row)))
+    .filter((row) => row.some((cell) => cleanScoreboardText(cell)))
+
+  if (rowArrays.length === 0) return []
+
+  const header = rowArrays[0].map(cleanScoreboardText)
+  const seasonStarts = header
+    .map((cell, index) => {
+      const match = cell.match(/^Season\s*(\d+)/i)
+      return match ? { id: match[1], label: `Season ${match[1]}`, start: index } : null
+    })
+    .filter(Boolean)
+
+  return seasonStarts
+    .map((season, index) => {
+      const end = seasonStarts[index + 1]?.start ?? header.length
+      const teamStart = header.findIndex((cell, columnIndex) =>
+        columnIndex >= season.start &&
+        columnIndex < end &&
+        /^Teams\b/i.test(cell)
+      )
+
+      if (teamStart === -1) return null
+
+      const teams = []
+
+      for (let columnIndex = teamStart; columnIndex < end; columnIndex += 1) {
+        const teamName = normalizeTeamName(stripTeamHeader(header[columnIndex]))
+
+        if (teamName) {
+          teams.push({
+            name: teamName,
+            columnIndex,
+          })
+        }
+      }
+
+      let currentLabel = ""
+      const entries = rowArrays.slice(1)
+        .map((row, rowIndex) => {
+          const label = cleanScoreboardMetric(row[season.start])
+          const detailCells = []
+
+          for (let columnIndex = season.start + 1; columnIndex < teamStart; columnIndex += 1) {
+            const cell = cleanScoreboardMetric(row[columnIndex])
+
+            if (cell) {
+              detailCells.push(cell)
+            }
+          }
+
+          const hasTeamValues = teams.some((team) => cleanScoreboardText(row[team.columnIndex]))
+
+          if (!label && detailCells.length === 0 && !hasTeamValues) {
+            return null
+          }
+
+          if (label) {
+            currentLabel = label
+          }
+
+          if (!currentLabel) {
+            return null
+          }
+
+          const metric = detailCells.at(-1) || (label ? "Total" : "")
+          const category = detailCells.length > 1 ? detailCells.slice(0, -1).join(" ") : ""
+
+          return {
+            id: `${season.id}-${rowIndex}`,
+            label: label || currentLabel,
+            category,
+            metric,
+            values: teams.map((team) => ({
+              team: team.name,
+              value: formatScoreboardValue(row[team.columnIndex]),
+            })),
+            isTotal:
+              /total/i.test(label || currentLabel) ||
+              /total/i.test(metric) ||
+              /grand total/i.test(metric),
+          }
+        })
+        .filter(Boolean)
+
+      return {
+        ...season,
+        teams,
+        entries,
+      }
+    })
+    .filter(Boolean)
 }
 export default function App() {
   const [rawData, setRawData] = useState([]);
 const [dailyData, setDailyData] = useState([]);
 const [playerInfoData, setPlayerInfoData] = useState([]);
+const [teamScoreboardData, setTeamScoreboardData] = useState([]);
+const [awardsData, setAwardsData] = useState([]);
 const [geoguessrActivity, setGeoguessrActivity] = useState({
   players: [],
   checkedAt: null,
@@ -109,6 +289,12 @@ const DAILY_URL =
 
 const PLAYER_INFO_URL =
   "https://docs.google.com/spreadsheets/d/1ev1Gw72evcdMUp-M1xSOEuZJiarnOK4NKxscPVQiXeY/gviz/tq?tqx=out:csv&sheet=Player%20Info";
+
+const TEAM_SCOREBOARD_URL =
+  "https://docs.google.com/spreadsheets/d/1ev1Gw72evcdMUp-M1xSOEuZJiarnOK4NKxscPVQiXeY/gviz/tq?tqx=out:csv&sheet=team%20scoreboard";
+
+const AWARDS_URL =
+  "https://docs.google.com/spreadsheets/d/1ev1Gw72evcdMUp-M1xSOEuZJiarnOK4NKxscPVQiXeY/gviz/tq?tqx=out:csv&sheet=awards%20%26%20accolades";
 
 useEffect(() => {
   const hasData = (row) => Object.values(row).some((value) => String(value || "").trim())
@@ -140,6 +326,24 @@ useEffect(() => {
         setPlayerInfoData(results.data.filter(hasData));
       },
       error: () => setPlayerInfoData([]),
+    });
+
+    Papa.parse(freshUrl(TEAM_SCOREBOARD_URL), {
+      download: true,
+      header: false,
+      complete: (results) => {
+        setTeamScoreboardData(results.data.filter(hasData));
+      },
+      error: () => setTeamScoreboardData([]),
+    });
+
+    Papa.parse(freshUrl(AWARDS_URL), {
+      download: true,
+      header: true,
+      complete: (results) => {
+        setAwardsData(results.data.filter(hasData));
+      },
+      error: () => setAwardsData([]),
     });
   };
 
@@ -191,6 +395,7 @@ useEffect(() => {
   }
 }, [])
   const [activeTab, setActiveTab] = useState("leaders")
+  const [selectedSeason, setSelectedSeason] = useState("all")
 
   const [selectedTeam, setSelectedTeam] = useState("All")
 
@@ -199,6 +404,13 @@ const [selectedModes, setSelectedModes] = useState([
   "No Move",
   "NMPZ",
 ])
+
+const selectedSeasonLabel = getSeasonLabel(selectedSeason)
+const teamScoreboardSeasons = useMemo(
+  () => parseTeamScoreboardRows(teamScoreboardData),
+  [teamScoreboardData]
+)
+
 const currentPlayerTeams = useMemo(() => {
   const infoTeams = {}
 
@@ -241,28 +453,30 @@ const currentPlayerTeams = useMemo(() => {
 
 const filteredRawData = useMemo(() => {
   return rawData.filter((row) => {
+    const seasonMatches = rowMatchesSeason(row, selectedSeason)
     const player = normalizePlayerName(row["CTP Player"])
     const currentTeam = currentPlayerTeams[player] || normalizeTeamName(row["CTP Team"])
     const teamMatches =
       selectedTeam === "All" ||
       currentTeam === selectedTeam
 
-    const mode = row["Mode"]
+    const mode = getModeValue(row)
 
     const modeMatches =
       !mode || selectedModes.includes(mode)
 
-    return teamMatches && modeMatches
+    return seasonMatches && teamMatches && modeMatches
   })
-}, [currentPlayerTeams, rawData, selectedTeam, selectedModes])
+}, [currentPlayerTeams, rawData, selectedSeason, selectedTeam, selectedModes])
 
 const filteredDailyData = useMemo(() => {
   return dailyData.filter((row) => {
-    const mode = row["Mode"]
+    const seasonMatches = rowMatchesSeason(row, selectedSeason)
+    const mode = getModeValue(row)
 
-    return !mode || selectedModes.includes(mode)
+    return seasonMatches && (!mode || selectedModes.includes(mode))
   })
-}, [dailyData, selectedModes])
+}, [dailyData, selectedSeason, selectedModes])
 
 const playerStats = useMemo(() => {
   const map = {};
@@ -293,10 +507,10 @@ const playerStats = useMemo(() => {
     const player = normalizePlayerName(row["CTP Player"]);
     const team = currentPlayerTeams[player] || normalizeTeamName(row["CTP Team"]);
     const region = row["Region"];
-    const distance = parseFloat(row["CTP Distance (km)"]) || 0;
+    const distance = getNumericSheetValue(row, ["CTP Distance (km)", "CTP Distance"]);
     const ko = row["Knockout Punch"];
     const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
-    const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
+    const defensiveDistance = getNumericSheetValue(row, ["2nd CTP Distance (km)", "2nd CTP Distance"]);
 
     if (defensivePlayer) {
       const defender = ensurePlayer(defensivePlayer, currentPlayerTeams[defensivePlayer])
@@ -416,13 +630,13 @@ const teamStats = useMemo(() => {
 
   filteredRawData.forEach((row) => {
     const team = normalizeTeamName(row["CTP Team"]);
-    const distance = parseFloat(row["CTP Distance (km)"]) || 0;
+    const distance = getNumericSheetValue(row, ["CTP Distance (km)", "CTP Distance"]);
     const ko = row["Knockout Punch"];
     const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
     const defensiveTeam =
       normalizeTeamName(getSheetValue(row, ["2nd CTP Team", "Second CTP Team", "Defensive Team"])) ||
       currentPlayerTeams[defensivePlayer];
-    const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
+    const defensiveDistance = getNumericSheetValue(row, ["2nd CTP Distance (km)", "2nd CTP Distance"]);
 
     if (!team) return;
 
@@ -477,9 +691,9 @@ const regionStats = useMemo(() => {
   filteredRawData.forEach((row) => {
     const region = row["Region"];
     const player = normalizePlayerName(row["CTP Player"]);
-    const distance = parseFloat(row["CTP Distance (km)"]) || 0;
+    const distance = getNumericSheetValue(row, ["CTP Distance (km)", "CTP Distance"]);
     const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
-    const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
+    const defensiveDistance = getNumericSheetValue(row, ["2nd CTP Distance (km)", "2nd CTP Distance"]);
 
     if (!region || !player) return;
 
@@ -560,9 +774,9 @@ const countryStats = useMemo(() => {
     const country = row["Country/State"];
     const region = row["Region"];
     const player = normalizePlayerName(row["CTP Player"]);
-    const distance = parseFloat(row["CTP Distance (km)"]) || 0;
+    const distance = getNumericSheetValue(row, ["CTP Distance (km)", "CTP Distance"]);
     const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
-    const defensiveDistance = parseFloat(row["2nd CTP Distance"]) || 0;
+    const defensiveDistance = getNumericSheetValue(row, ["2nd CTP Distance (km)", "2nd CTP Distance"]);
 
     if (!country || !player) return;
 
@@ -644,7 +858,7 @@ const liveMatches = useMemo(() => {
     .map((row) => ({
       winner: normalizeTeamName(row["CTP Team"]) || "Unknown",
       loser: "Field",
-      score: `${row["CTP Player"] || "Unknown"} • ${row["CTP Distance (km)"] || "0"} km`,
+      score: `${row["CTP Player"] || "Unknown"} • ${formatDistance(getNumericSheetValue(row, ["CTP Distance (km)", "CTP Distance"]))}`,
       status: row["Knockout Punch"] && row["Knockout Punch"] !== "-" ? "KO" : "CTP",
     }));
 }, [filteredRawData]);
@@ -662,7 +876,7 @@ const leagueStats = useMemo(() => {
   const totalGuesses = filteredRawData.filter((row) => row["CTP Player"]).length
   const defensivePins = filteredRawData.filter((row) => row["2nd CTP"]).length
   const totalDistance = filteredRawData.reduce(
-    (sum, row) => sum + (parseFloat(row["CTP Distance (km)"]) || 0),
+    (sum, row) => sum + getNumericSheetValue(row, ["CTP Distance (km)", "CTP Distance"]),
     0
   )
   const bestTeam = [...teamStats].sort((a, b) => b.ctps - a.ctps || a.avgDistance - b.avgDistance)[0]
@@ -684,6 +898,8 @@ const leagueStats = useMemo(() => {
         <TopNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
         <FilterBar
+          selectedSeason={selectedSeason}
+          setSelectedSeason={setSelectedSeason}
           selectedTeam={selectedTeam}
           setSelectedTeam={setSelectedTeam}
           selectedModes={selectedModes}
@@ -691,26 +907,39 @@ const leagueStats = useMemo(() => {
         />
 <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs sm:text-sm font-bold">
   <p className="text-green-400">
-    Raw Entries: {rawData.length}
+    Raw Entries in View: {filteredRawData.length}
   </p>
 
   <p className="text-cyan-400">
-    Daily Entries: {dailyData.length}
+    Daily Entries in View: {filteredDailyData.length}
   </p>
 
   <p className="text-pink-400">
-    Players Loaded: {playerStats.length}
+    Season View: {selectedSeasonLabel}
   </p>
 </div>
-        {activeTab === "leaders" && <LeadersTab playerStats={playerStats} teamStats={teamStats} liveMatches={liveMatches} liveRegions={liveRegions} leagueStats={leagueStats} />}
+        {activeTab === "leaders" && (
+          <LeadersTab
+            playerStats={playerStats}
+            teamStats={teamStats}
+            liveMatches={liveMatches}
+            liveRegions={liveRegions}
+            leagueStats={leagueStats}
+            selectedSeason={selectedSeason}
+            selectedSeasonLabel={selectedSeasonLabel}
+            teamScoreboardSeasons={teamScoreboardSeasons}
+            awardsData={awardsData}
+          />
+        )}
         {activeTab === "regions" && (
           <RegionsTab
             regionStats={regionStats}
             countryStats={countryStats}
+            selectedSeasonLabel={selectedSeasonLabel}
           />
         )}
-        {activeTab === "players" && <PlayersTab playerStats={playerStats} dailyData={filteredDailyData} />}
-        {activeTab === "daily" && <DailyChallengeTab dailyData={filteredDailyData} />}
+        {activeTab === "players" && <PlayersTab playerStats={playerStats} dailyData={filteredDailyData} selectedSeasonLabel={selectedSeasonLabel} />}
+        {activeTab === "daily" && <DailyChallengeTab dailyData={filteredDailyData} selectedSeasonLabel={selectedSeasonLabel} />}
       </div>
 
       <GeoGuessrActivityTicker activity={geoguessrActivity} />
@@ -841,7 +1070,9 @@ function TopNav({ activeTab, setActiveTab }) {
   )
 }
 
-function PageHeader({ eyebrow, title, description }) {
+function PageHeader({ eyebrow, title, description, seasonLabel = "All-Time" }) {
+  const seasonId = SEASON_OPTIONS.find((season) => season.label === seasonLabel)?.id || "all"
+
   return (
     <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5 mb-6 sm:mb-8">
       <div>
@@ -860,12 +1091,12 @@ function PageHeader({ eyebrow, title, description }) {
 
       <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl px-4 sm:px-6 py-4 sm:py-5 shadow-2xl">
         <p className="text-slate-400 text-xs uppercase tracking-widest">
-          Current Season
+          Stats View
         </p>
 
         <div className="flex items-end gap-3 mt-2">
-          <span className="text-4xl sm:text-5xl font-black">01</span>
-          <span className="text-cyan-400 font-semibold mb-1">Week 12</span>
+          <span className="text-4xl sm:text-5xl font-black">{getSeasonBadge(seasonId)}</span>
+          <span className="text-cyan-400 font-semibold mb-1">{seasonLabel}</span>
         </div>
       </div>
     </div>
@@ -899,7 +1130,17 @@ function StatCard({ label, value, sub, accent = "cyan" }) {
   )
 }
 
-function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions, leagueStats }) {
+function LeadersTab({
+  playerStats,
+  teamStats,
+  liveMatches,
+  liveRegions,
+  leagueStats,
+  selectedSeason,
+  selectedSeasonLabel,
+  teamScoreboardSeasons,
+  awardsData,
+}) {
   const ctpLeader = playerStats[0]
   const bestAvgPlayer = [...playerStats].sort((a, b) => a.avgDistance - b.avgDistance)[0]
   const koLeader = [...playerStats].sort((a, b) => b.kos - a.kos || a.avgDistance - b.avgDistance)[0]
@@ -909,6 +1150,7 @@ function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions, leagueSt
   const bestRecentPlayer = [...playerStats]
     .filter((player) => player.recentForm?.sampleSize > 0)
     .sort((a, b) => a.recentForm.avgDistance - b.recentForm.avgDistance)[0]
+  const emptyLeaderLabel = "No Data Yet"
 
   return (
     <>
@@ -916,12 +1158,13 @@ function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions, leagueSt
         eyebrow="Competitive Analytics"
         title="League Leaders"
         description="Real league leaderboards for CTPs, average distance, knockouts, team totals, recent results, and last-20-guess form."
+        seasonLabel={selectedSeasonLabel}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6 mb-8">
         <StatCard
           label="CTP Leader"
-          value={ctpLeader?.name || "Loading"}
+          value={ctpLeader?.name || emptyLeaderLabel}
           sub={`${ctpLeader?.ctps || 0} CTPs`}
           accent="cyan"
         />
@@ -929,20 +1172,20 @@ function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions, leagueSt
         <StatCard
           label="Best Avg Distance"
           value={formatDistance(bestAvgPlayer?.avgDistance)}
-          sub={bestAvgPlayer?.name || "Loading"}
+          sub={bestAvgPlayer?.name || emptyLeaderLabel}
           accent="purple"
         />
 
         <StatCard
           label="KO Leader"
-          value={koLeader?.name || "Loading"}
+          value={koLeader?.name || emptyLeaderLabel}
           sub={`${koLeader?.kos || 0} KOs`}
           accent="pink"
         />
 
         <StatCard
           label="Defensive Pins"
-          value={defensiveLeader?.name || "Loading"}
+          value={defensiveLeader?.name || emptyLeaderLabel}
           sub={`${defensiveLeader?.defensivePins || 0} pins`}
           accent="cyan"
         />
@@ -950,10 +1193,16 @@ function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions, leagueSt
         <StatCard
           label="Best Recent Form"
           value={formatDistance(bestRecentPlayer?.recentForm?.avgDistance)}
-          sub={`${bestRecentPlayer?.name || "Loading"} • Last 20 guesses`}
+          sub={`${bestRecentPlayer?.name || emptyLeaderLabel} • Last 20 guesses`}
           accent="emerald"
         />
       </div>
+
+      <TeamScoreboardSection
+        seasons={teamScoreboardSeasons}
+        selectedSeason={selectedSeason}
+        selectedSeasonLabel={selectedSeasonLabel}
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Panel className="xl:col-span-2">
@@ -991,12 +1240,216 @@ function LeadersTab({ playerStats, teamStats, liveMatches, liveRegions, leagueSt
         </MobileCollapsiblePanel>
       </div>
 
-      <BottomAnalytics liveMatches={liveMatches} liveRegions={liveRegions} leagueStats={leagueStats} />
+      <BottomAnalytics
+        liveMatches={liveMatches}
+        liveRegions={liveRegions}
+        leagueStats={leagueStats}
+        selectedSeasonLabel={selectedSeasonLabel}
+      />
+
+      <AwardsAccoladesCard
+        awardsData={awardsData}
+        selectedSeason={selectedSeason}
+        selectedSeasonLabel={selectedSeasonLabel}
+      />
     </>
   )
 }
 
-function RegionsTab({ regionStats, countryStats }) {
+function TeamScoreboardSection({ seasons = [], selectedSeason, selectedSeasonLabel }) {
+  const visibleSeasons =
+    selectedSeason === "all"
+      ? seasons
+      : seasons.filter((season) => season.id === selectedSeason)
+
+  return (
+    <Panel className="mb-6">
+      <PanelHeader
+        eyebrow="Team Scoreboard"
+        title="Team Scoreboard"
+        right={selectedSeason === "all" ? "All Seasons" : selectedSeasonLabel}
+      />
+
+      {visibleSeasons.length > 0 ? (
+        <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 sm:gap-6">
+          {visibleSeasons.map((season) => (
+            <ScoreboardSeasonTable key={season.id} season={season} />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm font-bold text-slate-400">
+          {selectedSeasonLabel} scoreboard data will appear here once the Google Sheet has entries.
+        </div>
+      )}
+    </Panel>
+  )
+}
+
+function ScoreboardSeasonTable({ season }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#0b1220]/70 p-4 sm:p-5">
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <p className="text-emerald-300 text-xs font-black uppercase tracking-[0.2em]">
+            Scoreboard
+          </p>
+          <h4 className="mt-2 text-2xl font-black">{season.label}</h4>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {season.teams.map((team) => {
+            const brand = getTeamBrand(team.name)
+
+            return (
+              <span
+                key={team.name}
+                className={`inline-flex items-center gap-2 rounded-xl border ${brand.border} bg-white/5 px-3 py-2 text-xs font-black ${brand.accent}`}
+              >
+                <TeamLogo teamName={team.name} className="h-5 w-5" />
+                {team.name}
+              </span>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[34rem] border-separate border-spacing-y-2 text-left text-sm">
+          <thead>
+            <tr className="text-slate-500">
+              <th className="px-3 py-2 font-bold">Week</th>
+              <th className="px-3 py-2 font-bold">Metric</th>
+              {season.teams.map((team) => (
+                <th key={team.name} className="px-3 py-2 text-right font-bold">
+                  {team.name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {season.entries.map((entry) => (
+              <tr
+                key={entry.id}
+                className={entry.isTotal ? "bg-emerald-400/10 text-emerald-100" : "bg-white/5"}
+              >
+                <td className="rounded-l-xl px-3 py-3 font-black">{entry.label}</td>
+                <td className="px-3 py-3">
+                  <p className="font-bold">{entry.metric || "Score"}</p>
+                  {entry.category && (
+                    <p className="mt-1 text-xs font-bold text-slate-500">{entry.category}</p>
+                  )}
+                </td>
+                {entry.values.map((value, index) => (
+                  <td
+                    key={`${entry.id}-${value.team}`}
+                    className={`px-3 py-3 text-right font-black ${index === entry.values.length - 1 ? "rounded-r-xl" : ""}`}
+                  >
+                    {value.value}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function AwardsAccoladesCard({ awardsData = [], selectedSeason, selectedSeasonLabel }) {
+  const categories = [
+    { key: "Team Champion", label: "Team Champion", type: "team", accent: "text-cyan-300" },
+    { key: "MVP", label: "MVP", accent: "text-emerald-300" },
+    { key: "KO Champion", label: "KO Champion", accent: "text-pink-300" },
+    { key: "CTP Champion", label: "CTP Champion", accent: "text-purple-300" },
+    { key: "KPPG Champion", label: "KPPG Champion", accent: "text-amber-300" },
+    { key: "CTPPG Champion", label: "CTPPG Champion", accent: "text-cyan-300" },
+  ]
+
+  const visibleAwards = awardsData
+    .filter((row) => normalizeSeasonId(getSheetValue(row, ["Season"])))
+    .filter((row) => {
+      if (selectedSeason === "all") return true
+
+      return normalizeSeasonId(getSheetValue(row, ["Season"])) === selectedSeason
+    })
+    .sort((a, b) => {
+      const first = Number(normalizeSeasonId(getSheetValue(a, ["Season"]))) || 0
+      const second = Number(normalizeSeasonId(getSheetValue(b, ["Season"]))) || 0
+
+      return second - first
+    })
+
+  return (
+    <Panel className="mt-6">
+      <PanelHeader
+        eyebrow="Awards & Accolades"
+        title="Awards & Accolades"
+        right={selectedSeason === "all" ? "All-Time Honors" : selectedSeasonLabel}
+      />
+
+      {visibleAwards.length > 0 ? (
+        <div className="space-y-4">
+          {visibleAwards.map((row) => {
+            const seasonId = normalizeSeasonId(getSheetValue(row, ["Season"]))
+
+            return (
+              <div key={seasonId} className="rounded-2xl border border-white/10 bg-[#0b1220]/70 p-4 sm:p-5">
+                <div className="mb-5 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-cyan-300 text-xs font-black uppercase tracking-[0.2em]">
+                      Hall of Results
+                    </p>
+                    <h4 className="mt-2 text-2xl font-black">{getSeasonLabel(seasonId)}</h4>
+                  </div>
+
+                  <span className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-sm font-black text-cyan-200">
+                    {getSeasonBadge(seasonId)}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {categories.map((category) => {
+                    const winner = getSheetValue(row, [category.key])
+
+                    if (!winner) return null
+
+                    return (
+                      <div key={category.key} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.18em]">
+                          {category.label}
+                        </p>
+
+                        <div className="mt-3 flex items-center gap-3">
+                          {category.type === "team" ? (
+                            <TeamLogo teamName={winner} className="h-10 w-10" />
+                          ) : (
+                            <PlayerAvatar playerName={winner} className="h-10 w-10" />
+                          )}
+
+                          <p className={`min-w-0 text-lg font-black ${category.accent}`}>
+                            {winner}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm font-bold text-slate-400">
+          {selectedSeasonLabel} awards will appear here once the Awards & Accolades sheet has winners.
+        </div>
+      )}
+    </Panel>
+  )
+}
+
+function RegionsTab({ regionStats, countryStats, selectedSeasonLabel }) {
   const [viewMode, setViewMode] = useState("regions")
   const [mapMetric, setMapMetric] = useState("distance")
   const activeGeoStats =
@@ -1016,6 +1469,7 @@ function RegionsTab({ regionStats, countryStats }) {
         eyebrow="Geo Analytics"
         title="Regions & Countries"
         description="Regional performance, strongest territories, map-read consistency, and location-specific dominance."
+        seasonLabel={selectedSeasonLabel}
       />
 <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center md:justify-end gap-3">
   <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-2xl p-2 backdrop-blur-xl overflow-x-auto">
@@ -1159,7 +1613,7 @@ function RegionsTab({ regionStats, countryStats }) {
   )
 }
 
-function PlayersTab({ playerStats = [], dailyData = [] }) {
+function PlayersTab({ playerStats = [], dailyData = [], selectedSeasonLabel }) {
   const dailyPlayerStats = useMemo(() => buildDailyPlayerStats(dailyData), [dailyData])
   const playerProfiles = useMemo(() => {
     return playerStats.map((player) => ({
@@ -1186,6 +1640,7 @@ function PlayersTab({ playerStats = [], dailyData = [] }) {
         eyebrow="Player Database"
         title="Player Profiles"
         description="Individual dossiers for each league player, combining season performance, Daily Challenge form, and head-to-head comparison."
+        seasonLabel={selectedSeasonLabel}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -1930,7 +2385,7 @@ function MiniStat({ label, value, accent = "" }) {
   )
 }
 
-function BottomAnalytics({ liveMatches = [], liveRegions = [], leagueStats }) {
+function BottomAnalytics({ liveMatches = [], liveRegions = [], leagueStats, selectedSeasonLabel = "All-Time" }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
       <Panel>
@@ -1972,7 +2427,7 @@ function BottomAnalytics({ liveMatches = [], liveRegions = [], leagueStats }) {
       </Panel>
 
       <Panel>
-        <PanelHeader eyebrow="Activity" title="League Stats" right="Season" />
+        <PanelHeader eyebrow="Activity" title="League Stats" right={selectedSeasonLabel} />
 
         <div className="grid grid-cols-2 gap-4">
           <MiniStat label="CTP Entries" value={leagueStats?.totalGuesses || 0} />
@@ -2086,6 +2541,8 @@ function PlayerDistanceChart({ playerStats = [] }) {
   )
 }
 function FilterBar({
+  selectedSeason,
+  setSelectedSeason,
   selectedTeam,
   setSelectedTeam,
   selectedModes,
@@ -2109,11 +2566,28 @@ function FilterBar({
         </p>
 
         <p className="text-slate-300 text-sm">
-          Filter every tab by team and game mode.
+          Filter every tab by season, team, and game mode.
         </p>
       </div>
 
       <div className="flex flex-col md:flex-row gap-3 sm:gap-4">
+        <div className="flex gap-2 overflow-x-auto md:flex-wrap">
+          {SEASON_OPTIONS.map((season) => (
+            <button
+              key={season.id}
+              type="button"
+              onClick={() => setSelectedSeason(season.id)}
+              className={`shrink-0 px-4 py-3 rounded-xl text-sm font-bold border transition-all ${
+                selectedSeason === season.id
+                  ? "bg-emerald-400 text-black border-emerald-300"
+                  : "bg-white/5 text-slate-400 border-white/10 hover:text-white"
+              }`}
+            >
+              {season.label}
+            </button>
+          ))}
+        </div>
+
         <select
           value={selectedTeam}
           onChange={(event) => setSelectedTeam(event.target.value)}
@@ -2128,6 +2602,7 @@ function FilterBar({
           {modes.map((mode) => (
             <button
               key={mode}
+              type="button"
               onClick={() => toggleMode(mode)}
               className={`shrink-0 px-4 py-3 rounded-xl text-sm font-bold border transition-all ${
                 selectedModes.includes(mode)

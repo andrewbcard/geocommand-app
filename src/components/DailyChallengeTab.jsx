@@ -14,7 +14,7 @@ import {
   parseNumber,
 } from "../data/stats.js"
 
-export default function DailyChallengeTab({ dailyData = [] }) {
+export default function DailyChallengeTab({ dailyData = [], selectedSeasonLabel = "All-Time" }) {
   const playerStats = useMemo(() => buildDailyPlayerStats(dailyData), [dailyData])
   const regionStats = useMemo(() => buildDailyRegionStats(dailyData), [dailyData])
   const [compareA, setCompareA] = useState("")
@@ -51,6 +51,7 @@ export default function DailyChallengeTab({ dailyData = [] }) {
         eyebrow="Daily Challenge"
         title="Daily Challenge"
         description="Live stats from the Daily Challenges sheet: country hits, region hits, distance, timing, date, and mode."
+        seasonLabel={selectedSeasonLabel}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
@@ -150,7 +151,7 @@ export default function DailyChallengeTab({ dailyData = [] }) {
       </Panel>
 
       <Panel className="mb-6 sm:mb-8">
-        <PanelHeader eyebrow="Lowlight Reel" title="Wall of Shame" right="Worst 5 by Distance (all-time)" />
+        <PanelHeader eyebrow="Lowlight Reel" title="Wall of Shame" right={`Worst 5 by Distance (${selectedSeasonLabel})`} />
 
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-3 sm:gap-4">
           {shameRows.map((row, index) => (

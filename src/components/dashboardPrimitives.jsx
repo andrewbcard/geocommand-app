@@ -1,4 +1,11 @@
-export function PageHeader({ eyebrow, title, description }) {
+function getSeasonBadge(seasonLabel) {
+  if (seasonLabel === "Season 1") return "01"
+  if (seasonLabel === "Season 2") return "02"
+
+  return "All"
+}
+
+export function PageHeader({ eyebrow, title, description, seasonLabel = "All-Time" }) {
   return (
     <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5 mb-6 sm:mb-8">
       <div>
@@ -17,12 +24,12 @@ export function PageHeader({ eyebrow, title, description }) {
 
       <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl px-4 sm:px-6 py-4 sm:py-5 shadow-2xl">
         <p className="text-slate-400 text-xs uppercase tracking-widest">
-          Current Season
+          Stats View
         </p>
 
         <div className="flex items-end gap-3 mt-2">
-          <span className="text-4xl sm:text-5xl font-black">01</span>
-          <span className="text-cyan-400 font-semibold mb-1">Week 12</span>
+          <span className="text-4xl sm:text-5xl font-black">{getSeasonBadge(seasonLabel)}</span>
+          <span className="text-cyan-400 font-semibold mb-1">{seasonLabel}</span>
         </div>
       </div>
     </div>
