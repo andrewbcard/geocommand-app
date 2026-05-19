@@ -1309,6 +1309,10 @@ function formatScoreboardLineLabel(entry) {
     return `${entry.category}: ${entry.metric || "Score"}`
   }
 
+  if (/^(no move|nmpz)$/i.test(entry.metric || "")) {
+    return `Battle Wins: ${entry.metric}`
+  }
+
   return entry.metric || "Score"
 }
 
