@@ -927,8 +927,14 @@ const leagueStats = useMemo(() => {
             leagueStats={leagueStats}
             selectedSeason={selectedSeason}
             selectedSeasonLabel={selectedSeasonLabel}
-            teamScoreboardSeasons={teamScoreboardSeasons}
             awardsData={awardsData}
+          />
+        )}
+        {activeTab === "scoreboard" && (
+          <ScoreboardTab
+            seasons={teamScoreboardSeasons}
+            selectedSeason={selectedSeason}
+            selectedSeasonLabel={selectedSeasonLabel}
           />
         )}
         {activeTab === "regions" && (
@@ -1034,6 +1040,7 @@ function GeoGuessrActivityTicker({ activity }) {
 function TopNav({ activeTab, setActiveTab }) {
     const tabs = [
       { id: "leaders", label: "Leaders" },
+      { id: "scoreboard", label: "Scoreboard" },
       { id: "regions", label: "Regions" },
       { id: "players", label: "Players" },
       { id: "daily", label: "Daily Challenge" },
@@ -1138,7 +1145,6 @@ function LeadersTab({
   leagueStats,
   selectedSeason,
   selectedSeasonLabel,
-  teamScoreboardSeasons,
   awardsData,
 }) {
   const ctpLeader = playerStats[0]
@@ -1198,12 +1204,6 @@ function LeadersTab({
         />
       </div>
 
-      <TeamScoreboardSection
-        seasons={teamScoreboardSeasons}
-        selectedSeason={selectedSeason}
-        selectedSeasonLabel={selectedSeasonLabel}
-      />
-
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <Panel className="xl:col-span-2">
           <PanelHeader eyebrow="Team Totals" title="CTPs, Defensive Pins, and KOs" right="Updated Live" />
@@ -1256,6 +1256,25 @@ function LeadersTab({
   )
 }
 
+function ScoreboardTab({ seasons = [], selectedSeason, selectedSeasonLabel }) {
+  return (
+    <>
+      <PageHeader
+        eyebrow="Team Scoreboard"
+        title="Team Scoreboard"
+        description="Weekly team scoring from the Team Scoreboard sheet, with expandable details for battle wins, modes, Tuesdaily points, and totals."
+        seasonLabel={selectedSeasonLabel}
+      />
+
+      <TeamScoreboardSection
+        seasons={seasons}
+        selectedSeason={selectedSeason}
+        selectedSeasonLabel={selectedSeasonLabel}
+      />
+    </>
+  )
+}
+
 function TeamScoreboardSection({ seasons = [], selectedSeason, selectedSeasonLabel }) {
   const visibleSeasons =
     selectedSeason === "all"
@@ -1285,7 +1304,62 @@ function TeamScoreboardSection({ seasons = [], selectedSeason, selectedSeasonLab
   )
 }
 
+function formatScoreboardLineLabel(entry) {
+  if (entry.category) {
+    return `${entry.category}: ${entry.metric || "Score"}`
+  }
+
+  return entry.metric || "Score"
+}
+
+function buildScoreboardGroups(entries = []) {
+  const weekGroups = []
+  const seasonTotals = []
+  const weekPattern = /^week\s+\d+/i
+
+  entries.forEach((entry) => {
+    const label = cleanScoreboardText(entry.label)
+
+    if (!weekPattern.test(label)) {
+      seasonTotals.push(entry)
+      return
+    }
+
+    let group = weekGroups.find((item) => item.label === label)
+
+    if (!group) {
+      group = {
+        label,
+        entries: [],
+      }
+      weekGroups.push(group)
+    }
+
+    group.entries.push(entry)
+  })
+
+  return {
+    weekGroups: weekGroups.map((group) => {
+      const totalEntry =
+        [...group.entries].reverse().find((entry) => /total/i.test(entry.metric)) ||
+        group.entries[group.entries.length - 1]
+
+      return {
+        ...group,
+        totalEntry,
+        detailEntries: group.entries.filter((entry) => entry !== totalEntry),
+      }
+    }),
+    seasonTotals,
+  }
+}
+
 function ScoreboardSeasonTable({ season }) {
+  const { weekGroups, seasonTotals } = buildScoreboardGroups(season.entries)
+  const seasonTotalEntry =
+    [...seasonTotals].reverse().find((entry) => /grand total|total/i.test(entry.metric)) ||
+    seasonTotals[seasonTotals.length - 1]
+
   return (
     <div className="rounded-2xl border border-white/10 bg-[#0b1220]/70 p-4 sm:p-5">
       <div className="mb-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
@@ -1313,46 +1387,106 @@ function ScoreboardSeasonTable({ season }) {
         </div>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[34rem] border-separate border-spacing-y-2 text-left text-sm">
-          <thead>
-            <tr className="text-slate-500">
-              <th className="px-3 py-2 font-bold">Week</th>
-              <th className="px-3 py-2 font-bold">Metric</th>
-              {season.teams.map((team) => (
-                <th key={team.name} className="px-3 py-2 text-right font-bold">
-                  {team.name}
-                </th>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {season.entries.map((entry) => (
-              <tr
-                key={entry.id}
-                className={entry.isTotal ? "bg-emerald-400/10 text-emerald-100" : "bg-white/5"}
-              >
-                <td className="rounded-l-xl px-3 py-3 font-black">{entry.label}</td>
-                <td className="px-3 py-3">
-                  <p className="font-bold">{entry.metric || "Score"}</p>
-                  {entry.category && (
-                    <p className="mt-1 text-xs font-bold text-slate-500">{entry.category}</p>
-                  )}
-                </td>
-                {entry.values.map((value, index) => (
-                  <td
-                    key={`${entry.id}-${value.team}`}
-                    className={`px-3 py-3 text-right font-black ${index === entry.values.length - 1 ? "rounded-r-xl" : ""}`}
-                  >
-                    {value.value}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+        {weekGroups.map((week) => (
+          <ScoreboardWeekCard key={week.label} week={week} teams={season.teams} />
+        ))}
       </div>
+
+      {seasonTotalEntry && (
+        <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4 sm:p-5">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <p className="text-emerald-300 text-xs font-black uppercase tracking-[0.2em]">
+                Season Total
+              </p>
+              <h5 className="mt-2 text-xl font-black">{formatScoreboardLineLabel(seasonTotalEntry)}</h5>
+            </div>
+
+            <ScoreboardTeamValues values={seasonTotalEntry.values} compact={false} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ScoreboardWeekCard({ week, teams }) {
+  return (
+    <details className="interactive-card group rounded-2xl border border-white/10 bg-white/5 p-4 transition-all hover:bg-white/10">
+      <summary className="list-none cursor-pointer">
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.18em]">
+                Weekly Total
+              </p>
+              <h5 className="mt-2 text-2xl font-black">{week.label}</h5>
+            </div>
+
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/10 text-cyan-300 font-black transition-transform group-open:rotate-45">
+              +
+            </div>
+          </div>
+
+          <ScoreboardTeamValues values={week.totalEntry?.values || []} />
+        </div>
+      </summary>
+
+      <div className="mt-5 border-t border-white/10 pt-5">
+        <div className="hidden sm:grid text-slate-500 text-xs font-bold uppercase tracking-[0.14em]" style={{ gridTemplateColumns: `minmax(12rem, 1.5fr) repeat(${teams.length}, minmax(6rem, 1fr))` }}>
+          <div className="px-3 pb-2">Entry</div>
+          {teams.map((team) => (
+            <div key={team.name} className="px-3 pb-2 text-right">
+              {team.name}
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-2">
+          {week.detailEntries.map((entry) => (
+            <div
+              key={entry.id}
+              className="grid grid-cols-1 sm:items-center gap-2 rounded-xl bg-[#070b14]/70 p-3 text-sm sm:grid-cols-[minmax(12rem,1.5fr)_1fr]"
+            >
+              <p className="font-bold text-slate-200">{formatScoreboardLineLabel(entry)}</p>
+
+              <ScoreboardTeamValues values={entry.values} compact />
+            </div>
+          ))}
+
+          {week.detailEntries.length === 0 && (
+            <div className="rounded-xl bg-[#070b14]/70 p-3 text-sm font-bold text-slate-400">
+              No detail lines recorded for this week yet.
+            </div>
+          )}
+        </div>
+      </div>
+    </details>
+  )
+}
+
+function ScoreboardTeamValues({ values = [], compact = true }) {
+  return (
+    <div className={`grid gap-2 ${compact ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2"}`}>
+      {values.map((value) => {
+        const brand = getTeamBrand(value.team)
+
+        return (
+          <div
+            key={`${value.team}-${value.value}`}
+            className={`rounded-xl border ${brand.border} bg-white/5 px-3 py-2 text-right`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className={`flex min-w-0 items-center gap-2 text-xs font-black ${brand.accent}`}>
+                <TeamLogo teamName={value.team} className="h-5 w-5" />
+                <span className="truncate">{value.team}</span>
+              </span>
+              <span className="shrink-0 text-lg font-black text-white">{value.value}</span>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
