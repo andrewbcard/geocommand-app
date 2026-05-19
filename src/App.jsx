@@ -394,7 +394,7 @@ useEffect(() => {
     window.clearInterval(interval)
   }
 }, [])
-  const [activeTab, setActiveTab] = useState("leaders")
+  const [activeTab, setActiveTab] = useState("scoreboard")
   const [selectedSeason, setSelectedSeason] = useState("all")
 
   const [selectedTeam, setSelectedTeam] = useState("All")
@@ -1039,8 +1039,8 @@ function GeoGuessrActivityTicker({ activity }) {
 
 function TopNav({ activeTab, setActiveTab }) {
     const tabs = [
-      { id: "leaders", label: "Leaders" },
       { id: "scoreboard", label: "Scoreboard" },
+      { id: "leaders", label: "Leaders" },
       { id: "regions", label: "Regions" },
       { id: "players", label: "Players" },
       { id: "daily", label: "Daily Challenge" },
