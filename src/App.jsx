@@ -477,7 +477,7 @@ const currentPlayerTeams = useMemo(() => {
 
   playerInfoData.forEach((row) => {
     const player = normalizePlayerName(getSheetValue(row, ["Player", "Player Name", "Name"]))
-    const team = normalizeTeamName(getSheetValue(row, ["Current team", "Current Team"]))
+    const team = normalizeTeamName(getSheetValue(row, ["New Team", "Current team", "Current Team"]))
 
     if (player && team) {
       infoTeams[player] = team
@@ -598,12 +598,16 @@ const filteredRawData = useMemo(() => {
     const seasonMatches = rowMatchesSeason(row, selectedSeason)
     const player = normalizePlayerName(row["CTP Player"])
     const defensivePlayer = normalizePlayerName(row["2nd CTP"])
+    const currentTeam = currentPlayerTeams[player] || ""
+    const currentDefensiveTeam = currentPlayerTeams[defensivePlayer] || ""
     const ctpTeam = normalizeTeamName(row["CTP Team"]) || getPlayerTeamForRow(player, row)
     const defensiveTeam =
       normalizeTeamName(getSheetValue(row, ["2nd CTP Team", "Second CTP Team", "Defensive Team"])) ||
       getPlayerTeamForRow(defensivePlayer, row)
     const teamMatches =
       selectedTeam === "All" ||
+      currentTeam === selectedTeam ||
+      currentDefensiveTeam === selectedTeam ||
       ctpTeam === selectedTeam ||
       defensiveTeam === selectedTeam
 
@@ -614,7 +618,7 @@ const filteredRawData = useMemo(() => {
 
     return seasonMatches && teamMatches && modeMatches
   })
-}, [getPlayerTeamForRow, rawData, selectedSeason, selectedTeam, selectedModes])
+}, [currentPlayerTeams, getPlayerTeamForRow, rawData, selectedSeason, selectedTeam, selectedModes])
 
 const filteredDailyData = useMemo(() => {
   return dailyData.filter((row) => {
@@ -652,12 +656,13 @@ const playerStats = useMemo(() => {
 
   filteredRawData.forEach((row) => {
     const player = normalizePlayerName(row["CTP Player"]);
-    const team = normalizeTeamName(row["CTP Team"]) || getPlayerTeamForRow(player, row);
+    const team = currentPlayerTeams[player] || getPlayerTeamForRow(player, row) || normalizeTeamName(row["CTP Team"]);
     const region = row["Region"];
     const distance = getNumericSheetValue(row, ["CTP Distance (km)", "CTP Distance"]);
     const ko = row["Knockout Punch"];
     const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
     const defensiveTeam =
+      currentPlayerTeams[defensivePlayer] ||
       normalizeTeamName(getSheetValue(row, ["2nd CTP Team", "Second CTP Team", "Defensive Team"])) ||
       getPlayerTeamForRow(defensivePlayer, row)
     const defensiveDistance = getNumericSheetValue(row, ["2nd CTP Distance (km)", "2nd CTP Distance"]);
@@ -774,7 +779,7 @@ const playerStats = useMemo(() => {
       };
     })
     .sort((a, b) => b.ctps - a.ctps || a.avgDistance - b.avgDistance);
-}, [filteredRawData, getPlayerTeamForRow, selectedTeam]);
+}, [currentPlayerTeams, filteredRawData, getPlayerTeamForRow, selectedTeam]);
 
 const teamStats = useMemo(() => {
   const map = {};
