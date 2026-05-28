@@ -2068,7 +2068,7 @@ function getPlayerArchetype(player, daily) {
     return {
       label: "Safety Net",
       accent: "text-cyan-300",
-      description: "Turns near-misses into team insurance with Defensive Pins.",
+      description: "Awarded to players with a high Defensive Pins total compared with their CTP total.",
     }
   }
 
@@ -2076,7 +2076,7 @@ function getPlayerArchetype(player, daily) {
     return {
       label: "Closer",
       accent: "text-pink-300",
-      description: "Finishes rounds with enough KOs to make the lobby nervous.",
+      description: "Awarded to players with a strong Knockout Punch total.",
     }
   }
 
@@ -2084,7 +2084,7 @@ function getPlayerArchetype(player, daily) {
     return {
       label: "Sniper",
       accent: "text-emerald-300",
-      description: "Wins CTPs by keeping the average distance brutally low.",
+      description: "Awarded to players with a very low average CTP distance.",
     }
   }
 
@@ -2092,7 +2092,7 @@ function getPlayerArchetype(player, daily) {
     return {
       label: "Daily Demon",
       accent: "text-purple-300",
-      description: "Brings the Daily Challenge form into everything else.",
+      description: "Awarded to players with a strong Daily Challenge average distance.",
     }
   }
 
@@ -2100,7 +2100,7 @@ function getPlayerArchetype(player, daily) {
     return {
       label: "Globe Trotter",
       accent: "text-amber-300",
-      description: "Has enough regional range to be annoying almost anywhere.",
+      description: "Awarded to players with recorded CTPs across many different regions.",
     }
   }
 
@@ -2108,14 +2108,14 @@ function getPlayerArchetype(player, daily) {
     return {
       label: "Heater",
       accent: "text-emerald-300",
-      description: "Recent form is moving in the correct and inconvenient direction.",
+      description: "Awarded to players whose recent average distance is better than their previous recent sample.",
     }
   }
 
   return {
     label: "Wildcard",
     accent: "text-slate-300",
-    description: "The profile is still writing its scouting report.",
+    description: "Used when a player does not currently match one of the more specific archetype rules.",
   }
 }
 
@@ -2123,7 +2123,7 @@ function ArchetypeBadge({ archetype, className = "" }) {
   const safeArchetype = archetype || {
     label: "Wildcard",
     accent: "text-slate-300",
-    description: "The profile is still writing its scouting report.",
+    description: "Used when a player does not currently match one of the more specific archetype rules.",
   }
 
   return (
