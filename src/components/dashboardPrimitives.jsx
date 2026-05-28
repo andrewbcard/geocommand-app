@@ -1,6 +1,7 @@
 function getSeasonBadge(seasonLabel) {
-  if (seasonLabel === "Season 1") return "01"
-  if (seasonLabel === "Season 2") return "02"
+  const seasonNumber = String(seasonLabel || "").match(/\d+/)?.[0]
+
+  if (seasonNumber) return seasonNumber.padStart(2, "0")
 
   return "All"
 }

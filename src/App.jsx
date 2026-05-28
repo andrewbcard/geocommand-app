@@ -40,7 +40,7 @@ const TEAM_BRANDING = {
   },
 }
 
-const SEASON_OPTIONS = [
+const BASE_SEASON_OPTIONS = [
   { id: "2", label: "Season 2", badge: "02" },
   { id: "1", label: "Season 1", badge: "01" },
   { id: "all", label: "All-Time", badge: "All" },
@@ -102,18 +102,24 @@ function normalizeSeasonId(value) {
   const normalized = String(value || "").trim().toLowerCase()
 
   if (!normalized) return ""
+  if (normalized === "all" || normalized === "all-time" || normalized === "all time") return "all"
   if (normalized === "1" || normalized === "s1" || normalized === "season 1") return "1"
   if (normalized === "2" || normalized === "s2" || normalized === "season 2") return "2"
 
-  return normalized.replace(/^season\s+/i, "")
+  return normalized.replace(/^s(eason)?\s*/i, "")
 }
 
 function getSeasonLabel(seasonId) {
-  return SEASON_OPTIONS.find((season) => season.id === seasonId)?.label || `Season ${seasonId}`
+  if (seasonId === "all") return "All-Time"
+
+  return `Season ${seasonId}`
 }
 
 function getSeasonBadge(seasonId) {
-  return SEASON_OPTIONS.find((season) => season.id === seasonId)?.badge || seasonId
+  if (seasonId === "all") return "All"
+  if (/^\d+$/.test(String(seasonId))) return String(seasonId).padStart(2, "0")
+
+  return seasonId
 }
 
 function rowMatchesSeason(row, selectedSeason, fallbackSeason = "1") {
@@ -126,6 +132,36 @@ function rowMatchesSeason(row, selectedSeason, fallbackSeason = "1") {
 
 function getModeValue(row) {
   return getSheetValue(row, ["Mode", "Game Mode"])
+}
+
+function buildSeasonOptions(seasonIds = []) {
+  const ids = new Set(BASE_SEASON_OPTIONS.map((season) => season.id).filter((id) => id !== "all"))
+
+  seasonIds.map(normalizeSeasonId).filter((id) => id && id !== "all").forEach((id) => ids.add(id))
+
+  const seasons = [...ids].sort((a, b) => {
+    const first = Number(a)
+    const second = Number(b)
+
+    if (Number.isFinite(first) && Number.isFinite(second)) return second - first
+
+    return b.localeCompare(a)
+  })
+
+  return [
+    ...seasons.map((id) => ({
+      id,
+      label: getSeasonLabel(id),
+      badge: getSeasonBadge(id),
+    })),
+    { id: "all", label: "All-Time", badge: "All" },
+  ]
+}
+
+function buildTeamOptions(teamNames = []) {
+  const teams = teamNames.map(normalizeTeamName).filter(Boolean)
+
+  return ["All", ...[...new Set(teams)].sort((a, b) => a.localeCompare(b))]
 }
 
 function getTeamBrand(teamName) {
@@ -272,6 +308,7 @@ export default function App() {
   const [rawData, setRawData] = useState([]);
 const [dailyData, setDailyData] = useState([]);
 const [playerInfoData, setPlayerInfoData] = useState([]);
+const [transactionLogData, setTransactionLogData] = useState([]);
 const [teamScoreboardData, setTeamScoreboardData] = useState([]);
 const [awardsData, setAwardsData] = useState([]);
 const [geoguessrActivity, setGeoguessrActivity] = useState({
@@ -289,6 +326,9 @@ const DAILY_URL =
 
 const PLAYER_INFO_URL =
   "https://docs.google.com/spreadsheets/d/1ev1Gw72evcdMUp-M1xSOEuZJiarnOK4NKxscPVQiXeY/gviz/tq?tqx=out:csv&sheet=Player%20Info";
+
+const TRANSACTION_LOG_URL =
+  "https://docs.google.com/spreadsheets/d/1ev1Gw72evcdMUp-M1xSOEuZJiarnOK4NKxscPVQiXeY/gviz/tq?tqx=out:csv&sheet=Transaction%20Log";
 
 const TEAM_SCOREBOARD_URL =
   "https://docs.google.com/spreadsheets/d/1ev1Gw72evcdMUp-M1xSOEuZJiarnOK4NKxscPVQiXeY/gviz/tq?tqx=out:csv&sheet=team%20scoreboard";
@@ -326,6 +366,15 @@ useEffect(() => {
         setPlayerInfoData(results.data.filter(hasData));
       },
       error: () => setPlayerInfoData([]),
+    });
+
+    Papa.parse(freshUrl(TRANSACTION_LOG_URL), {
+      download: true,
+      header: true,
+      complete: (results) => {
+        setTransactionLogData(results.data.filter(hasData));
+      },
+      error: () => setTransactionLogData([]),
     });
 
     Papa.parse(freshUrl(TEAM_SCOREBOARD_URL), {
@@ -411,6 +460,18 @@ const teamScoreboardSeasons = useMemo(
   [teamScoreboardData]
 )
 
+const seasonOptions = useMemo(() => {
+  const seasonIds = [
+    ...rawData.map((row) => getSheetValue(row, ["Season", "League Season"])),
+    ...dailyData.map((row) => getSheetValue(row, ["Season", "League Season"])),
+    ...awardsData.map((row) => getSheetValue(row, ["Season", "League Season"])),
+    ...transactionLogData.map((row) => getSheetValue(row, ["Effective Season", "Season"])),
+    ...teamScoreboardSeasons.map((season) => season.id),
+  ]
+
+  return buildSeasonOptions(seasonIds)
+}, [awardsData, dailyData, rawData, teamScoreboardSeasons, transactionLogData])
+
 const currentPlayerTeams = useMemo(() => {
   const infoTeams = {}
 
@@ -451,14 +512,100 @@ const currentPlayerTeams = useMemo(() => {
   )
 }, [playerInfoData, rawData])
 
+const transactionTeams = useMemo(() => {
+  const map = {}
+
+  transactionLogData.forEach((row, index) => {
+    const player = normalizePlayerName(getSheetValue(row, ["Player", "Player Name", "Name"]))
+    const team = normalizeTeamName(getSheetValue(row, ["To Team", "Current Team", "Current team", "Team"]))
+
+    if (!player || !team) return
+
+    if (!map[player]) {
+      map[player] = []
+    }
+
+    map[player].push({
+      team,
+      date: parseSheetDate(getSheetValue(row, ["Effective Date", "Date"])),
+      season: normalizeSeasonId(getSheetValue(row, ["Effective Season", "Season"])),
+      week: parseNumber(getSheetValue(row, ["Effective Week", "Week"])),
+      index,
+    })
+  })
+
+  Object.values(map).forEach((moves) => {
+    moves.sort((a, b) => a.date - b.date || Number(a.season || 0) - Number(b.season || 0) || a.week - b.week || a.index - b.index)
+  })
+
+  return map
+}, [transactionLogData])
+
+const getPlayerTeamForRow = useMemo(() => {
+  return (playerName, row) => {
+    const player = normalizePlayerName(playerName)
+    const moves = transactionTeams[player] || []
+
+    if (moves.length === 0) {
+      return currentPlayerTeams[player] || ""
+    }
+
+    const rowDate = parseSheetDate(getSheetValue(row, ["Date", "Match Date"]))
+    const rowSeason = normalizeSeasonId(getSheetValue(row, ["Season", "League Season"]))
+    const rowWeek = parseNumber(getSheetValue(row, ["Week", "League Week"]))
+
+    if (rowDate) {
+      return [...moves].reverse().find((move) => move.date && move.date <= rowDate)?.team || currentPlayerTeams[player] || ""
+    }
+
+    if (rowSeason) {
+      const rowSeasonNumber = Number(rowSeason)
+      const matchingMove = [...moves].reverse().find((move) => {
+        if (!move.season) return false
+
+        const moveSeasonNumber = Number(move.season)
+
+        if (!Number.isFinite(moveSeasonNumber) || moveSeasonNumber > rowSeasonNumber) return false
+        if (moveSeasonNumber < rowSeasonNumber) return true
+
+        return !rowWeek || !move.week || move.week <= rowWeek
+      })
+
+      return matchingMove?.team || currentPlayerTeams[player] || ""
+    }
+
+    return currentPlayerTeams[player] || moves[moves.length - 1]?.team || ""
+  }
+}, [currentPlayerTeams, transactionTeams])
+
+const teamOptions = useMemo(() => {
+  const teams = [
+    ...Object.values(currentPlayerTeams),
+    ...rawData.map((row) => getSheetValue(row, ["CTP Team"])),
+    ...rawData.map((row) => getSheetValue(row, ["2nd CTP Team", "Second CTP Team", "Defensive Team"])),
+    ...transactionLogData.flatMap((row) => [
+      getSheetValue(row, ["From Team"]),
+      getSheetValue(row, ["To Team"]),
+    ]),
+    ...teamScoreboardSeasons.flatMap((season) => season.teams.map((team) => team.name)),
+  ]
+
+  return buildTeamOptions(teams)
+}, [currentPlayerTeams, rawData, teamScoreboardSeasons, transactionLogData])
+
 const filteredRawData = useMemo(() => {
   return rawData.filter((row) => {
     const seasonMatches = rowMatchesSeason(row, selectedSeason)
     const player = normalizePlayerName(row["CTP Player"])
-    const currentTeam = currentPlayerTeams[player] || normalizeTeamName(row["CTP Team"])
+    const defensivePlayer = normalizePlayerName(row["2nd CTP"])
+    const ctpTeam = normalizeTeamName(row["CTP Team"]) || getPlayerTeamForRow(player, row)
+    const defensiveTeam =
+      normalizeTeamName(getSheetValue(row, ["2nd CTP Team", "Second CTP Team", "Defensive Team"])) ||
+      getPlayerTeamForRow(defensivePlayer, row)
     const teamMatches =
       selectedTeam === "All" ||
-      currentTeam === selectedTeam
+      ctpTeam === selectedTeam ||
+      defensiveTeam === selectedTeam
 
     const mode = getModeValue(row)
 
@@ -467,7 +614,7 @@ const filteredRawData = useMemo(() => {
 
     return seasonMatches && teamMatches && modeMatches
   })
-}, [currentPlayerTeams, rawData, selectedSeason, selectedTeam, selectedModes])
+}, [getPlayerTeamForRow, rawData, selectedSeason, selectedTeam, selectedModes])
 
 const filteredDailyData = useMemo(() => {
   return dailyData.filter((row) => {
@@ -505,21 +652,25 @@ const playerStats = useMemo(() => {
 
   filteredRawData.forEach((row) => {
     const player = normalizePlayerName(row["CTP Player"]);
-    const team = currentPlayerTeams[player] || normalizeTeamName(row["CTP Team"]);
+    const team = normalizeTeamName(row["CTP Team"]) || getPlayerTeamForRow(player, row);
     const region = row["Region"];
     const distance = getNumericSheetValue(row, ["CTP Distance (km)", "CTP Distance"]);
     const ko = row["Knockout Punch"];
     const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
+    const defensiveTeam =
+      normalizeTeamName(getSheetValue(row, ["2nd CTP Team", "Second CTP Team", "Defensive Team"])) ||
+      getPlayerTeamForRow(defensivePlayer, row)
     const defensiveDistance = getNumericSheetValue(row, ["2nd CTP Distance (km)", "2nd CTP Distance"]);
 
-    if (defensivePlayer) {
-      const defender = ensurePlayer(defensivePlayer, currentPlayerTeams[defensivePlayer])
+    if (defensivePlayer && (selectedTeam === "All" || defensiveTeam === selectedTeam)) {
+      const defender = ensurePlayer(defensivePlayer, defensiveTeam)
 
       defender.defensivePins += 1
       defender.totalDefensiveDistance += defensiveDistance
     }
 
     if (!player) return;
+    if (selectedTeam !== "All" && team !== selectedTeam) return
 
     const playerRecord = ensurePlayer(player, team)
 
@@ -623,7 +774,7 @@ const playerStats = useMemo(() => {
       };
     })
     .sort((a, b) => b.ctps - a.ctps || a.avgDistance - b.avgDistance);
-}, [filteredRawData, currentPlayerTeams]);
+}, [filteredRawData, getPlayerTeamForRow, selectedTeam]);
 
 const teamStats = useMemo(() => {
   const map = {};
@@ -635,12 +786,10 @@ const teamStats = useMemo(() => {
     const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
     const defensiveTeam =
       normalizeTeamName(getSheetValue(row, ["2nd CTP Team", "Second CTP Team", "Defensive Team"])) ||
-      currentPlayerTeams[defensivePlayer];
+      getPlayerTeamForRow(defensivePlayer, row);
     const defensiveDistance = getNumericSheetValue(row, ["2nd CTP Distance (km)", "2nd CTP Distance"]);
 
-    if (!team) return;
-
-    if (!map[team]) {
+    if (team && (selectedTeam === "All" || team === selectedTeam) && !map[team]) {
       map[team] = {
         name: team,
         ctps: 0,
@@ -651,11 +800,13 @@ const teamStats = useMemo(() => {
       };
     }
 
-    map[team].ctps += 1;
-    map[team].totalDistance += distance;
+    if (team && (selectedTeam === "All" || team === selectedTeam)) {
+      map[team].ctps += 1;
+      map[team].totalDistance += distance;
 
-    if (ko && ko !== "-") {
-      map[team].kos += 1;
+      if (ko && ko !== "-") {
+        map[team].kos += 1;
+      }
     }
 
     if (defensiveTeam && (selectedTeam === "All" || defensiveTeam === selectedTeam)) {
@@ -683,7 +834,7 @@ const teamStats = useMemo(() => {
         team.defensivePins > 0 ? team.totalDefensiveDistance / team.defensivePins : 0,
     }))
     .sort((a, b) => b.ctps - a.ctps);
-}, [currentPlayerTeams, filteredRawData, selectedTeam]);
+}, [filteredRawData, getPlayerTeamForRow, selectedTeam]);
 
 const regionStats = useMemo(() => {
   const map = {};
@@ -900,8 +1051,10 @@ const leagueStats = useMemo(() => {
         <FilterBar
           selectedSeason={selectedSeason}
           setSelectedSeason={setSelectedSeason}
+          seasonOptions={seasonOptions}
           selectedTeam={selectedTeam}
           setSelectedTeam={setSelectedTeam}
+          teamOptions={teamOptions}
           selectedModes={selectedModes}
           setSelectedModes={setSelectedModes}
         />
@@ -1078,7 +1231,7 @@ function TopNav({ activeTab, setActiveTab }) {
 }
 
 function PageHeader({ eyebrow, title, description, seasonLabel = "All-Time" }) {
-  const seasonId = SEASON_OPTIONS.find((season) => season.label === seasonLabel)?.id || "all"
+  const seasonId = normalizeSeasonId(seasonLabel)
 
   return (
     <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5 mb-6 sm:mb-8">
@@ -2681,8 +2834,10 @@ function PlayerDistanceChart({ playerStats = [] }) {
 function FilterBar({
   selectedSeason,
   setSelectedSeason,
+  seasonOptions = BASE_SEASON_OPTIONS,
   selectedTeam,
   setSelectedTeam,
+  teamOptions = ["All", "Lats", "Bontswana"],
   selectedModes,
   setSelectedModes,
 }) {
@@ -2710,7 +2865,7 @@ function FilterBar({
 
       <div className="flex flex-col md:flex-row gap-3 sm:gap-4">
         <div className="flex gap-2 overflow-x-auto md:flex-wrap">
-          {SEASON_OPTIONS.map((season) => (
+          {seasonOptions.map((season) => (
             <button
               key={season.id}
               type="button"
@@ -2731,9 +2886,11 @@ function FilterBar({
           onChange={(event) => setSelectedTeam(event.target.value)}
           className="bg-[#0f172a] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white w-full md:w-auto"
         >
-          <option value="All">All Teams</option>
-          <option value="Lats">Lats</option>
-          <option value="Bontswana">Bontswana</option>
+          {teamOptions.map((team) => (
+            <option key={team} value={team}>
+              {team === "All" ? "All Teams" : team}
+            </option>
+          ))}
         </select>
 
         <div className="flex gap-2 overflow-x-auto md:flex-wrap">
