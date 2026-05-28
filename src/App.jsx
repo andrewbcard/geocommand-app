@@ -8,6 +8,8 @@ import {
   Cell,
   CartesianGrid,
   LabelList,
+  Line,
+  LineChart,
   XAxis,
   YAxis,
   Tooltip,
@@ -207,6 +209,14 @@ function formatScoreboardValue(value) {
   return number.toLocaleString("en-US", {
     maximumFractionDigits: 2,
   })
+}
+
+function getScoreboardNumber(value) {
+  const cleanValue = cleanScoreboardText(value)
+
+  if (!cleanValue || !looksNumeric(cleanValue)) return 0
+
+  return parseNumber(cleanValue)
 }
 
 function parseTeamScoreboardRows(rows = []) {
@@ -900,9 +910,18 @@ const regionStats = useMemo(() => {
         Object.entries(region.players)
           .map(([name, data]) => ({
             name,
+            ctps: data.count,
             avgDistance: data.totalDistance / data.count,
           }))
           .sort((a, b) => a.avgDistance - b.avgDistance)[0];
+      const owner =
+        Object.entries(region.players)
+          .map(([name, data]) => ({
+            name,
+            ctps: data.count,
+            avgDistance: data.totalDistance / data.count,
+          }))
+          .sort((a, b) => b.ctps - a.ctps || a.avgDistance - b.avgDistance)[0];
       const bestDefensivePlayer =
         Object.entries(region.defensivePlayers)
           .map(([name, data]) => ({
@@ -917,6 +936,8 @@ const regionStats = useMemo(() => {
         avgDefensiveDistance:
           region.defensivePins > 0 ? region.totalDefensiveDistance / region.defensivePins : 0,
         bestPlayer: bestPlayer?.name || "N/A",
+        owner: owner?.name || "N/A",
+        ownerCtps: owner?.ctps || 0,
         bestDefensivePlayer: bestDefensivePlayer?.name || "N/A",
       };
     })
@@ -984,9 +1005,18 @@ const countryStats = useMemo(() => {
         Object.entries(country.players)
           .map(([name, data]) => ({
             name,
+            ctps: data.count,
             avgDistance: data.totalDistance / data.count,
           }))
           .sort((a, b) => a.avgDistance - b.avgDistance)[0];
+      const owner =
+        Object.entries(country.players)
+          .map(([name, data]) => ({
+            name,
+            ctps: data.count,
+            avgDistance: data.totalDistance / data.count,
+          }))
+          .sort((a, b) => b.ctps - a.ctps || a.avgDistance - b.avgDistance)[0];
       const bestDefensivePlayer =
         Object.entries(country.defensivePlayers)
           .map(([name, data]) => ({
@@ -1001,6 +1031,8 @@ const countryStats = useMemo(() => {
         avgDefensiveDistance:
           country.defensivePins > 0 ? country.totalDefensiveDistance / country.defensivePins : 0,
         bestPlayer: bestPlayer?.name || "N/A",
+        owner: owner?.name || "N/A",
+        ownerCtps: owner?.ctps || 0,
         bestDefensivePlayer: bestDefensivePlayer?.name || "N/A",
       };
     })
@@ -1516,11 +1548,33 @@ function buildScoreboardGroups(entries = []) {
   }
 }
 
+function buildMomentumData(season) {
+  const { weekGroups } = buildScoreboardGroups(season.entries)
+  const cumulativeScores = Object.fromEntries(season.teams.map((team) => [team.name, 0]))
+
+  return weekGroups.map((week) => {
+    const row = {
+      week: week.label.replace(/^week\s+/i, "W"),
+    }
+
+    week.totalEntry?.values.forEach((value) => {
+      const score = getScoreboardNumber(value.value)
+
+      row[value.team] = score
+      cumulativeScores[value.team] = (cumulativeScores[value.team] || 0) + score
+      row[`${value.team} Cumulative`] = cumulativeScores[value.team]
+    })
+
+    return row
+  })
+}
+
 function ScoreboardSeasonTable({ season }) {
   const { weekGroups, seasonTotals } = buildScoreboardGroups(season.entries)
   const seasonTotalEntry =
     [...seasonTotals].reverse().find((entry) => /grand total|total/i.test(entry.metric)) ||
     seasonTotals[seasonTotals.length - 1]
+  const momentumData = buildMomentumData(season)
 
   return (
     <div className="rounded-2xl border border-white/10 bg-[#0b1220]/70 p-4 sm:p-5">
@@ -1549,6 +1603,8 @@ function ScoreboardSeasonTable({ season }) {
         </div>
       </div>
 
+      <TeamMomentumChart season={season} data={momentumData} />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         {weekGroups.map((week) => (
           <ScoreboardWeekCard key={week.label} week={week} teams={season.teams} />
@@ -1569,6 +1625,61 @@ function ScoreboardSeasonTable({ season }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function TeamMomentumChart({ season, data = [] }) {
+  if (data.length === 0) return null
+
+  return (
+    <div className="mb-5 rounded-2xl border border-white/10 bg-white/5 p-4">
+      <div className="mb-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+        <div>
+          <p className="text-cyan-300 text-xs font-black uppercase tracking-[0.2em]">
+            Team Momentum
+          </p>
+          <h5 className="mt-2 text-xl font-black">Weekly Point Race</h5>
+        </div>
+
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
+          Cumulative points
+        </p>
+      </div>
+
+      <div className="h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 12, right: 18, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(148, 163, 184, 0.18)" />
+            <XAxis dataKey="week" stroke="#94a3b8" tick={{ fill: "#94a3b8", fontSize: 12 }} />
+            <YAxis stroke="#94a3b8" tick={{ fill: "#94a3b8", fontSize: 12 }} />
+            <Tooltip
+              contentStyle={{
+                background: "#0f172a",
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 16,
+                color: "#fff",
+              }}
+            />
+            {season.teams.map((team, index) => {
+              const colors = ["#22d3ee", "#d8b4fe", "#34d399", "#f472b6", "#fbbf24"]
+
+              return (
+                <Line
+                  key={team.name}
+                  type="monotone"
+                  dataKey={`${team.name} Cumulative`}
+                  name={team.name}
+                  stroke={colors[index % colors.length]}
+                  strokeWidth={4}
+                  dot={{ r: 4, strokeWidth: 2 }}
+                  activeDot={{ r: 6 }}
+                />
+              )
+            })}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   )
 }
@@ -1758,6 +1869,9 @@ function RegionsTab({ regionStats, countryStats, selectedSeasonLabel }) {
   const mostPlayed = [...activeGeoStats].sort(
     (a, b) => b.appearances - a.appearances
   )[0]
+  const topOwner = [...activeGeoStats]
+    .filter((region) => region.owner && region.owner !== "N/A")
+    .sort((a, b) => b.ownerCtps - a.ownerCtps || a.avgDistance - b.avgDistance)[0]
 
   return (
     <>
@@ -1849,6 +1963,37 @@ function RegionsTab({ regionStats, countryStats, selectedSeasonLabel }) {
         />
       </div>
 
+      <Panel className="mb-8">
+        <PanelHeader
+          eyebrow="Territory Control"
+          title={`${geoLabel} Ownership`}
+          right={topOwner ? `${topOwner.owner} leads ${topOwner.name}` : "Most CTPs"}
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          {activeGeoStats
+            .filter((region) => region.owner && region.owner !== "N/A")
+            .sort((a, b) => b.ownerCtps - a.ownerCtps || a.avgDistance - b.avgDistance)
+            .slice(0, 8)
+            .map((region) => (
+              <div key={`${region.name}-${region.owner}`} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.18em]">
+                  {region.name}
+                </p>
+
+                <div className="mt-3 flex items-center gap-3">
+                  <PlayerAvatar playerName={region.owner} className="h-10 w-10" />
+
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-black text-cyan-200">{region.owner}</p>
+                    <p className="text-sm font-bold text-slate-400">{region.ownerCtps} CTPs</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+        </div>
+      </Panel>
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {activeGeoStats.map((region) => {
           const tier = getDistanceTier(region.avgDistance)
@@ -1884,13 +2029,19 @@ function RegionsTab({ regionStats, countryStats, selectedSeasonLabel }) {
 
               <div className="space-y-4 mt-5 sm:mt-6">
                 <MiniStat
-                  label="Top Specialist"
-                  value={region.bestPlayer}
+                  label={`${geoLabel} Owner`}
+                  value={region.owner}
                   accent="text-cyan-400"
                 />
 
                 <MiniStat
-                  label="CTPs"
+                  label="Owner CTPs"
+                  value={region.ownerCtps}
+                  accent="text-emerald-400"
+                />
+
+                <MiniStat
+                  label="Total CTPs"
                   value={region.appearances}
                   accent="text-cyan-400"
                 />
@@ -1909,13 +2060,77 @@ function RegionsTab({ regionStats, countryStats, selectedSeasonLabel }) {
   )
 }
 
+function getPlayerArchetype(player, daily) {
+  const regionCount = Object.keys(player.regions || {}).length
+  const dailyAvg = daily?.avgDistance
+
+  if (player.defensivePins >= Math.max(5, player.ctps) && player.defensivePins > 0) {
+    return {
+      label: "Safety Net",
+      accent: "text-cyan-300",
+      description: "Turns near-misses into team insurance with Defensive Pins.",
+    }
+  }
+
+  if (player.kos >= 5 && player.kos >= player.defensivePins / 2) {
+    return {
+      label: "Closer",
+      accent: "text-pink-300",
+      description: "Finishes rounds with enough KOs to make the lobby nervous.",
+    }
+  }
+
+  if (Number.isFinite(player.avgDistance) && player.avgDistance > 0 && player.avgDistance < 50) {
+    return {
+      label: "Sniper",
+      accent: "text-emerald-300",
+      description: "Wins CTPs by keeping the average distance brutally low.",
+    }
+  }
+
+  if (Number.isFinite(dailyAvg) && dailyAvg > 0 && dailyAvg < 150) {
+    return {
+      label: "Daily Demon",
+      accent: "text-purple-300",
+      description: "Brings the Daily Challenge form into everything else.",
+    }
+  }
+
+  if (regionCount >= 6) {
+    return {
+      label: "Globe Trotter",
+      accent: "text-amber-300",
+      description: "Has enough regional range to be annoying almost anywhere.",
+    }
+  }
+
+  if (player.recentForm?.trend === "Heating Up") {
+    return {
+      label: "Heater",
+      accent: "text-emerald-300",
+      description: "Recent form is moving in the correct and inconvenient direction.",
+    }
+  }
+
+  return {
+    label: "Wildcard",
+    accent: "text-slate-300",
+    description: "The profile is still writing its scouting report.",
+  }
+}
+
 function PlayersTab({ playerStats = [], dailyData = [], selectedSeasonLabel }) {
   const dailyPlayerStats = useMemo(() => buildDailyPlayerStats(dailyData), [dailyData])
   const playerProfiles = useMemo(() => {
-    return playerStats.map((player) => ({
-      ...player,
-      daily: dailyPlayerStats.find((dailyPlayer) => dailyPlayer.name === player.name),
-    }))
+    return playerStats.map((player) => {
+      const daily = dailyPlayerStats.find((dailyPlayer) => dailyPlayer.name === player.name)
+
+      return {
+        ...player,
+        daily,
+        archetype: getPlayerArchetype(player, daily),
+      }
+    })
   }, [playerStats, dailyPlayerStats])
 
   const [selectedPlayerName, setSelectedPlayerName] = useState("")
@@ -2021,9 +2236,14 @@ function PlayersTab({ playerStats = [], dailyData = [], selectedSeasonLabel }) {
                   </span>
                 </div>
               </div>
+
+              <div className={`mt-4 inline-flex rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-black uppercase tracking-[0.16em] ${player.archetype.accent}`}>
+                {player.archetype.label}
+              </div>
             </summary>
 
             <div className="mt-5 space-y-3 sm:space-y-4">
+              <MiniStat label="Archetype" value={player.archetype.label} accent={player.archetype.accent} />
               <MiniStat label="CTPs" value={player.ctps} accent="text-cyan-400" />
               <MiniStat label="Defensive Pins" value={player.defensivePins} accent="text-cyan-400" />
               <MiniStat label="Avg Distance" value={formatDistance(player.avgDistance)} />
@@ -2161,12 +2381,19 @@ function PlayerProfileDetail({ player, shareTargetRef }) {
                 </p>
               </div>
 
+              <div className={`mb-3 inline-flex rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-black uppercase tracking-[0.18em] ${player.archetype?.accent || "text-slate-300"}`}>
+                {player.archetype?.label || "Wildcard"}
+              </div>
+
               <h3 className="text-3xl sm:text-5xl font-black break-words">{player.name}</h3>
               <p className="text-slate-400 mt-3 text-sm sm:text-base">
                 {player.consistency} season profile with {player.ctps} CTPs, {player.defensivePins} Defensive Pins, and {player.kos} KOs.
               </p>
               <p className="mt-4 max-w-3xl text-sm sm:text-base leading-7 text-slate-300">
                 {profileBlurb}
+              </p>
+              <p className="mt-3 max-w-3xl text-sm font-bold text-slate-400">
+                {player.archetype?.description}
               </p>
 
               <button
@@ -2189,9 +2416,9 @@ function PlayerProfileDetail({ player, shareTargetRef }) {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full lg:w-auto lg:min-w-[24rem]">
+            <MiniStat label="Archetype" value={player.archetype?.label || "Wildcard"} accent={player.archetype?.accent || "text-slate-300"} />
             <MiniStat label="Season Avg" value={formatDistance(player.avgDistance)} accent="text-cyan-400" />
             <MiniStat label="CTPs" value={player.ctps} accent="text-emerald-400" />
-            <MiniStat label="Defensive Pins" value={player.defensivePins} accent="text-cyan-400" />
           </div>
         </div>
       </div>
