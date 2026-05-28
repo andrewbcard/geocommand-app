@@ -2119,6 +2119,35 @@ function getPlayerArchetype(player, daily) {
   }
 }
 
+function ArchetypeBadge({ archetype, className = "" }) {
+  const safeArchetype = archetype || {
+    label: "Wildcard",
+    accent: "text-slate-300",
+    description: "The profile is still writing its scouting report.",
+  }
+
+  return (
+    <button
+      type="button"
+      className={`archetype-badge group relative inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-left text-xs font-black uppercase tracking-[0.16em] ${safeArchetype.accent} ${className}`}
+      aria-label={`${safeArchetype.label}: ${safeArchetype.description}`}
+      onClick={(event) => event.preventDefault()}
+    >
+      <span>{safeArchetype.label}</span>
+      <span className="grid h-5 w-5 place-items-center rounded-full border border-white/10 bg-black/20 text-[0.65rem] text-slate-200">
+        i
+      </span>
+
+      <span className="pointer-events-none absolute left-0 top-full z-30 mt-2 w-64 rounded-2xl border border-white/10 bg-[#050812]/95 p-3 text-xs font-bold normal-case tracking-normal text-slate-200 opacity-0 shadow-2xl backdrop-blur-xl transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 group-active:opacity-100">
+        <span className={`mb-1 block text-[0.65rem] font-black uppercase tracking-[0.18em] ${safeArchetype.accent}`}>
+          {safeArchetype.label}
+        </span>
+        {safeArchetype.description}
+      </span>
+    </button>
+  )
+}
+
 function PlayersTab({ playerStats = [], dailyData = [], selectedSeasonLabel }) {
   const dailyPlayerStats = useMemo(() => buildDailyPlayerStats(dailyData), [dailyData])
   const playerProfiles = useMemo(() => {
@@ -2237,9 +2266,7 @@ function PlayersTab({ playerStats = [], dailyData = [], selectedSeasonLabel }) {
                 </div>
               </div>
 
-              <div className={`mt-4 inline-flex rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-black uppercase tracking-[0.16em] ${player.archetype.accent}`}>
-                {player.archetype.label}
-              </div>
+              <ArchetypeBadge archetype={player.archetype} className="mt-4" />
             </summary>
 
             <div className="mt-5 space-y-3 sm:space-y-4">
@@ -2381,9 +2408,7 @@ function PlayerProfileDetail({ player, shareTargetRef }) {
                 </p>
               </div>
 
-              <div className={`mb-3 inline-flex rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs font-black uppercase tracking-[0.18em] ${player.archetype?.accent || "text-slate-300"}`}>
-                {player.archetype?.label || "Wildcard"}
-              </div>
+              <ArchetypeBadge archetype={player.archetype} className="mb-3" />
 
               <h3 className="text-3xl sm:text-5xl font-black break-words">{player.name}</h3>
               <p className="text-slate-400 mt-3 text-sm sm:text-base">
