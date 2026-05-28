@@ -2060,63 +2060,117 @@ function RegionsTab({ regionStats, countryStats, selectedSeasonLabel }) {
   )
 }
 
-function getPlayerArchetype(player, daily) {
-  const regionCount = Object.keys(player.regions || {}).length
-  const dailyAvg = daily?.avgDistance
-
-  if (player.defensivePins >= Math.max(5, player.ctps) && player.defensivePins > 0) {
-    return {
-      label: "Safety Net",
-      accent: "text-cyan-300",
-      description: "Awarded to players with a high Defensive Pins total compared with their CTP total.",
-    }
-  }
-
-  if (player.kos >= 5 && player.kos >= player.defensivePins / 2) {
-    return {
-      label: "Closer",
-      accent: "text-pink-300",
-      description: "Awarded to players with a strong Knockout Punch total.",
-    }
-  }
-
-  if (Number.isFinite(player.avgDistance) && player.avgDistance > 0 && player.avgDistance < 50) {
-    return {
-      label: "Sniper",
-      accent: "text-emerald-300",
-      description: "Awarded to players with a very low average CTP distance.",
-    }
-  }
-
-  if (Number.isFinite(dailyAvg) && dailyAvg > 0 && dailyAvg < 150) {
-    return {
-      label: "Daily Demon",
-      accent: "text-purple-300",
-      description: "Awarded to players with a strong Daily Challenge average distance.",
-    }
-  }
-
-  if (regionCount >= 6) {
-    return {
-      label: "Globe Trotter",
-      accent: "text-amber-300",
-      description: "Awarded to players with recorded CTPs across many different regions.",
-    }
-  }
-
-  if (player.recentForm?.trend === "Heating Up") {
-    return {
-      label: "Heater",
-      accent: "text-emerald-300",
-      description: "Awarded to players whose recent average distance is better than their previous recent sample.",
-    }
-  }
-
-  return {
+const ARCHETYPE_CAP = 3
+const ARCHETYPE_DEFINITIONS = {
+  "Safety Net": {
+    label: "Safety Net",
+    accent: "text-cyan-300",
+    description: "Awarded to players with a high Defensive Pins total compared with their CTP total.",
+  },
+  Closer: {
+    label: "Closer",
+    accent: "text-pink-300",
+    description: "Awarded to players with a strong Knockout Punch total. KOs are weighted heavily because they are rare.",
+  },
+  Sniper: {
+    label: "Sniper",
+    accent: "text-emerald-300",
+    description: "Awarded to players with a very low average CTP distance.",
+  },
+  "Daily Demon": {
+    label: "Daily Demon",
+    accent: "text-purple-300",
+    description: "Awarded to players with a strong Daily Challenge average distance.",
+  },
+  "Globe Trotter": {
+    label: "Globe Trotter",
+    accent: "text-amber-300",
+    description: "Awarded to players with recorded CTPs across many different regions.",
+  },
+  Heater: {
+    label: "Heater",
+    accent: "text-emerald-300",
+    description: "Awarded to players whose recent average distance is better than their previous recent sample.",
+  },
+  Wildcard: {
     label: "Wildcard",
     accent: "text-slate-300",
     description: "Used when a player does not currently match one of the more specific archetype rules.",
+  },
+}
+
+function buildArchetypeCandidate(label, score) {
+  return {
+    ...ARCHETYPE_DEFINITIONS[label],
+    score,
   }
+}
+
+function getPlayerArchetypeCandidates(player, daily) {
+  const regionCount = Object.keys(player.regions || {}).length
+  const dailyAvg = daily?.avgDistance
+  const candidates = []
+
+  if (player.defensivePins > 0) {
+    const defensiveShare = player.defensivePins / Math.max(player.ctps + player.defensivePins, 1)
+    candidates.push(buildArchetypeCandidate("Safety Net", player.defensivePins * 8 + defensiveShare * 45))
+  }
+
+  if (player.kos > 0) {
+    const koRate = player.kos / Math.max(player.ctps, 1)
+    candidates.push(buildArchetypeCandidate("Closer", player.kos * 30 + koRate * 40))
+  }
+
+  if (Number.isFinite(player.avgDistance) && player.avgDistance > 0) {
+    candidates.push(buildArchetypeCandidate("Sniper", Math.max(1, 120 - player.avgDistance)))
+  }
+
+  if (Number.isFinite(dailyAvg) && dailyAvg > 0) {
+    candidates.push(buildArchetypeCandidate("Daily Demon", Math.max(1, 240 - dailyAvg / 2)))
+  }
+
+  if (regionCount > 0) {
+    candidates.push(buildArchetypeCandidate("Globe Trotter", regionCount * 14 + player.ctps))
+  }
+
+  if (player.recentForm?.trend === "Heating Up") {
+    candidates.push(buildArchetypeCandidate("Heater", 80 + Math.max(1, 120 - (player.recentForm?.avgDistance || 120))))
+  }
+
+  candidates.push(buildArchetypeCandidate("Wildcard", 1))
+
+  return candidates.sort((a, b) => b.score - a.score)
+}
+
+function assignPlayerArchetypes(players = []) {
+  const assigned = new Map()
+  const counts = {}
+  const candidatesByPlayer = new Map(
+    players.map((player) => [player.name, getPlayerArchetypeCandidates(player, player.daily)])
+  )
+
+  while (assigned.size < players.length) {
+    const nextAssignment = players
+      .filter((player) => !assigned.has(player.name))
+      .map((player) => ({
+        player,
+        archetype: candidatesByPlayer
+          .get(player.name)
+          .find((candidate) => (counts[candidate.label] || 0) < ARCHETYPE_CAP),
+      }))
+      .filter((item) => item.archetype)
+      .sort((a, b) => b.archetype.score - a.archetype.score)[0]
+
+    if (!nextAssignment) break
+
+    assigned.set(nextAssignment.player.name, nextAssignment.archetype)
+    counts[nextAssignment.archetype.label] = (counts[nextAssignment.archetype.label] || 0) + 1
+  }
+
+  return players.map((player) => ({
+    ...player,
+    archetype: assigned.get(player.name) || ARCHETYPE_DEFINITIONS.Wildcard,
+  }))
 }
 
 function ArchetypeBadge({ archetype, className = "" }) {
@@ -2151,15 +2205,16 @@ function ArchetypeBadge({ archetype, className = "" }) {
 function PlayersTab({ playerStats = [], dailyData = [], selectedSeasonLabel }) {
   const dailyPlayerStats = useMemo(() => buildDailyPlayerStats(dailyData), [dailyData])
   const playerProfiles = useMemo(() => {
-    return playerStats.map((player) => {
+    const profiles = playerStats.map((player) => {
       const daily = dailyPlayerStats.find((dailyPlayer) => dailyPlayer.name === player.name)
 
       return {
         ...player,
         daily,
-        archetype: getPlayerArchetype(player, daily),
       }
     })
+
+    return assignPlayerArchetypes(profiles)
   }, [playerStats, dailyPlayerStats])
 
   const [selectedPlayerName, setSelectedPlayerName] = useState("")
