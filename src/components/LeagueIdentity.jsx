@@ -1,5 +1,5 @@
 const PLAYER_AVATARS = {
-  "Al Harris": "/league/players/al-harris.jpg",
+  "Al Harris": "/league/players/al-harris.png",
   "Andrew Card": "/league/players/andrew-card.jpg",
   "Buddy Hammon": "/league/players/buddy-hammon.jpg",
   "Caleb Heck": "/league/players/caleb-heck.jpg",

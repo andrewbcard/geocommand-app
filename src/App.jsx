@@ -2476,7 +2476,7 @@ function ArchetypeBadge({ archetype, className = "" }) {
 
 const CTP_RATE_TOOLTIP = "CTP Rate = CTPs in lineup-backed rounds divided by rounds played. Rounds played come from the BONT Lineup and LAT Lineup columns."
 const CTPOE_TOOLTIP = "CTPOE = CTPs over expected. Expected CTPs are based on lineup size for each round played. In a 5-player round, each player is expected to record 0.20 CTPs."
-const KO_RATE_TOOLTIP = "KO Rate = KOs in lineup-backed rounds divided by rounds played. Rounds played come from the BONT Lineup and LAT Lineup columns."
+const KO_RATE_TOOLTIP = "KOR = Knockout Rate. It is KOs in lineup-backed rounds divided by rounds played. Rounds played come from the BONT Lineup and LAT Lineup columns."
 const KOOE_TOOLTIP = "KOOE = KOs over expected. Expected KOs are based on game lineup size because there can only be one KO per game. In a 5-player game, each player is expected to record 0.20 KOs."
 const DPR_TOOLTIP = "DPR = Defensive Pins divided by defensive opportunities. One defensive opportunity exists when the opposing team records the CTP and the player is in that unique round's lineup."
 const DPOE_TOOLTIP = "DPOE = Defensive Pins over expected. Expected Defensive Pins are split once per unique round among the lineup on the team opposite the CTP winner."
@@ -2522,8 +2522,8 @@ function CtpoeLabel({ align = "left" }) {
 function KoRateLabel({ align = "left" }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span>KO Rate</span>
-      <InfoTooltip label="KO Rate" text={KO_RATE_TOOLTIP} align={align} />
+      <span>KOR</span>
+      <InfoTooltip label="KOR" text={KO_RATE_TOOLTIP} align={align} />
     </span>
   )
 }
@@ -2950,7 +2950,7 @@ function PlayerHeadToHead({
     { label: "DPR", tooltip: DPR_TOOLTIP, a: selectedPlayer?.defensivePinRate, b: comparisonPlayer?.defensivePinRate, format: formatCtpRate },
     { label: "DPOE", tooltip: DPOE_TOOLTIP, a: selectedPlayer?.dpoe, b: comparisonPlayer?.dpoe, format: formatDpoe },
     { label: "KOs", a: selectedPlayer?.kos, b: comparisonPlayer?.kos, format: (value) => value || 0 },
-    { label: "KO Rate", tooltip: KO_RATE_TOOLTIP, a: selectedPlayer?.koRate, b: comparisonPlayer?.koRate, format: formatCtpRate },
+    { label: "KOR", tooltip: KO_RATE_TOOLTIP, a: selectedPlayer?.koRate, b: comparisonPlayer?.koRate, format: formatCtpRate },
     { label: "KOOE", tooltip: KOOE_TOOLTIP, a: selectedPlayer?.kooe, b: comparisonPlayer?.kooe, format: formatKooe },
     { label: "Daily Avg", a: selectedPlayer?.daily?.avgDistance, b: comparisonPlayer?.daily?.avgDistance, format: formatDistance, lowerWins: true },
     { label: "Country Hit", a: selectedPlayer?.daily?.countryHitRate, b: comparisonPlayer?.daily?.countryHitRate, format: formatPercent },
@@ -3303,8 +3303,8 @@ function KoLeaderboard({ playerStats = [] }) {
         <span>Player</span>
         <span className="text-right">KOs</span>
         <span className="flex items-center justify-end gap-1.5">
-          KO Rate
-          <InfoTooltip label="KO Rate" text={KO_RATE_TOOLTIP} align="right" />
+          KOR
+          <InfoTooltip label="KOR" text={KO_RATE_TOOLTIP} align="right" />
         </span>
         <span className="flex items-center justify-end gap-1.5">
           KOOE
@@ -3331,8 +3331,8 @@ function KoLeaderboard({ playerStats = [] }) {
           <div className="text-right">
             <p className="text-pink-300 text-xl font-black">{formatCtpRate(player.koRate)}</p>
             <div className="mt-1 flex items-center justify-end gap-1.5 text-slate-500 text-xs sm:hidden">
-              <span>Rate</span>
-              <InfoTooltip label="KO Rate" text={KO_RATE_TOOLTIP} align="right" />
+              <span>KOR</span>
+              <InfoTooltip label="KOR" text={KO_RATE_TOOLTIP} align="right" />
             </div>
           </div>
 
