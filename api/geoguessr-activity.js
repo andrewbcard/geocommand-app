@@ -1,18 +1,84 @@
-const PLAYERS = [
-  { name: "Andrew Card", id: "600b1c069801910001451ac7" },
-  { name: "Caleb Heck", id: "69921ee53a246a7e905719fc" },
-  { name: "Clark Marshall", id: "58ebdeb627c28b2f783c0e8c" },
-  { name: "Chris Rossi", id: "5fdba10cb8fe34000115bddc" },
-  { name: "Nick Sant", id: "63a4bd8acc4be6d2ce9a5e53" },
-  { name: "Al Harris", id: "63a4c9c1a653001f41a5c6df" },
-  { name: "Buddy Hammon", id: "63a605465a33dc52d74c4749" },
-  { name: "Luke Gasque", id: "66ce1fca273658ad53bdaad7" },
-  { name: "Jarratt Rouse", id: "69a5e0ea9f4b9e73e77dbcc7" },
+import Papa from "papaparse"
+
+const PLAYER_INFO_URL =
+  "https://docs.google.com/spreadsheets/d/1ev1Gw72evcdMUp-M1xSOEuZJiarnOK4NKxscPVQiXeY/gviz/tq?tqx=out:csv&sheet=Player%20Info"
+
+const PLAYER_NAME_COLUMNS = ["Player", "Player Name", "Name"]
+const GEOGUESSR_PROFILE_COLUMNS = [
+  "GeoGuessr Profile URL",
+  "Geoguessr Profile URL",
+  "GeoGuessr URL",
+  "Geoguessr URL",
+  "GeoGuessr",
+  "Geoguessr",
+  "Profile URL",
+  "GeoGuessr ID",
+  "Geoguessr ID",
 ]
 
 const ACTIVE_MINUTES = 30
 const LIKELY_ACTIVE_MINUTES = 120
 const RECENT_MINUTES = 180
+const PLAYER_CACHE_MS = 60 * 1000
+
+let cachedPlayers = []
+let cachedPlayersAt = 0
+
+function getSheetValue(row, labels) {
+  const normalizedLabels = labels.map((label) => label.toLowerCase())
+  const entry = Object.entries(row).find(([key]) =>
+    normalizedLabels.includes(String(key || "").trim().toLowerCase())
+  )
+
+  return entry?.[1] || ""
+}
+
+function extractGeoGuessrId(value) {
+  const rawValue = String(value || "").trim()
+
+  if (!rawValue) return ""
+
+  const userPathMatch = rawValue.match(/geoguessr\.com\/user\/([^/?#\s]+)/i)
+  if (userPathMatch?.[1]) return userPathMatch[1]
+
+  const bareIdMatch = rawValue.match(/^[a-z0-9]{16,}$/i)
+  if (bareIdMatch) return rawValue
+
+  return ""
+}
+
+async function fetchPlayersFromSheet() {
+  if (Date.now() - cachedPlayersAt < PLAYER_CACHE_MS && cachedPlayers.length > 0) {
+    return cachedPlayers
+  }
+
+  const response = await fetch(`${PLAYER_INFO_URL}&cacheBust=${Date.now()}`)
+
+  if (!response.ok) {
+    throw new Error(`Player Info sheet returned ${response.status}`)
+  }
+
+  const csv = await response.text()
+  const results = Papa.parse(csv, { header: true, skipEmptyLines: true })
+
+  if (results.errors?.length) {
+    throw new Error("Could not read Player Info sheet")
+  }
+
+  cachedPlayers = results.data
+    .map((row) => {
+      const name = getSheetValue(row, PLAYER_NAME_COLUMNS).trim()
+      const profileValue = getSheetValue(row, GEOGUESSR_PROFILE_COLUMNS)
+      const id = extractGeoGuessrId(profileValue)
+
+      return name && id ? { name, id } : null
+    })
+    .filter(Boolean)
+
+  cachedPlayersAt = Date.now()
+
+  return cachedPlayers
+}
 
 function extractNextData(html) {
   const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">(.*?)<\/script>/)
@@ -73,11 +139,21 @@ async function fetchPlayerActivity(player) {
 }
 
 export default async function handler(request, response) {
-  const players = await Promise.all(PLAYERS.map(fetchPlayerActivity))
+  let source = "player-info-sheet"
+  let configuredPlayers = []
+
+  try {
+    configuredPlayers = await fetchPlayersFromSheet()
+  } catch (error) {
+    source = `player-info-sheet-error: ${error.message}`
+  }
+
+  const players = await Promise.all(configuredPlayers.map(fetchPlayerActivity))
 
   response.setHeader("Cache-Control", "no-store")
   response.status(200).json({
     checkedAt: new Date().toISOString(),
+    source,
     activeWindowMinutes: ACTIVE_MINUTES,
     likelyActiveWindowMinutes: LIKELY_ACTIVE_MINUTES,
     recentWindowMinutes: RECENT_MINUTES,
