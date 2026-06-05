@@ -106,19 +106,24 @@ function formatCtpRate(value) {
   return `${Math.round(value * 100)}%`
 }
 
-function formatCtpoe(value) {
+function formatOverExpected(value) {
   if (!Number.isFinite(value)) return "N/A"
 
   return `${value >= 0 ? "+" : ""}${value.toFixed(1)}`
 }
 
-function getCtpoeAccent(value) {
+function getOverExpectedAccent(value) {
   if (!Number.isFinite(value)) return "text-slate-400"
   if (value > 0) return "text-emerald-400"
   if (value < 0) return "text-pink-300"
 
   return "text-cyan-400"
 }
+
+const formatCtpoe = formatOverExpected
+const formatKooe = formatOverExpected
+const getCtpoeAccent = getOverExpectedAccent
+const getKooeAccent = getOverExpectedAccent
 
 function parseLineupPlayers(value) {
   return String(value || "")
@@ -700,6 +705,8 @@ const playerStats = useMemo(() => {
         expectedCtps: 0,
         totalDistance: 0,
         kos: 0,
+        opportunityKos: 0,
+        expectedKos: 0,
         defensivePins: 0,
         totalDefensiveDistance: 0,
         roundsPlayed: new Set(),
@@ -743,6 +750,7 @@ const playerStats = useMemo(() => {
 
           if (totalLineupPlayers > 0) {
             lineupRecord.expectedCtps += 1 / totalLineupPlayers
+            lineupRecord.expectedKos += 1 / totalLineupPlayers
           }
         }
       })
@@ -797,6 +805,10 @@ const playerStats = useMemo(() => {
 
     if (ko && ko !== "-") {
       playerRecord.kos += 1;
+
+      if (roundKey && lineupPlayersThisRound.has(player)) {
+        playerRecord.opportunityKos += 1
+      }
     }
   });
 
@@ -857,6 +869,8 @@ const playerStats = useMemo(() => {
         roundsPlayed: p.roundsPlayed.size,
         ctpRate: p.roundsPlayed.size > 0 ? p.opportunityCtps / p.roundsPlayed.size : null,
         ctpoe: p.expectedCtps > 0 ? p.opportunityCtps - p.expectedCtps : null,
+        koRate: p.roundsPlayed.size > 0 ? p.opportunityKos / p.roundsPlayed.size : null,
+        kooe: p.expectedKos > 0 ? p.opportunityKos - p.expectedKos : null,
         avgDistance: p.ctps > 0 ? p.totalDistance / p.ctps : 0,
         avgDefensiveDistance:
           p.defensivePins > 0 ? p.totalDefensiveDistance / p.defensivePins : 0,
@@ -2293,6 +2307,8 @@ function ArchetypeBadge({ archetype, className = "" }) {
 
 const CTP_RATE_TOOLTIP = "CTP Rate = CTPs in lineup-backed rounds divided by rounds played. Rounds played come from the BONT Lineup and LAT Lineup columns."
 const CTPOE_TOOLTIP = "CTPOE = CTPs over expected. Expected CTPs are based on lineup size for each round played. In a 5-player round, each player is expected to record 0.20 CTPs."
+const KO_RATE_TOOLTIP = "KO Rate = KOs in lineup-backed rounds divided by rounds played. Rounds played come from the BONT Lineup and LAT Lineup columns."
+const KOOE_TOOLTIP = "KOOE = KOs over expected. Expected KOs are based on lineup size for each round played. In a 5-player round, each player is expected to record 0.20 KOs."
 
 function InfoTooltip({ label = "Info", text, align = "left" }) {
   const positionClass = align === "right" ? "right-0" : "left-0"
@@ -2328,6 +2344,24 @@ function CtpoeLabel({ align = "left" }) {
     <span className="inline-flex items-center gap-1.5">
       <span>CTPOE</span>
       <InfoTooltip label="CTPOE" text={CTPOE_TOOLTIP} align={align} />
+    </span>
+  )
+}
+
+function KoRateLabel({ align = "left" }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span>KO Rate</span>
+      <InfoTooltip label="KO Rate" text={KO_RATE_TOOLTIP} align={align} />
+    </span>
+  )
+}
+
+function KooeLabel({ align = "left" }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span>KOOE</span>
+      <InfoTooltip label="KOOE" text={KOOE_TOOLTIP} align={align} />
     </span>
   )
 }
@@ -2469,6 +2503,8 @@ function PlayersTab({ playerStats = [], dailyData = [], selectedSeasonLabel }) {
                 accent="text-emerald-400"
               />
               <MiniStat label="KOs" value={player.kos} accent="text-pink-400" />
+              <MiniStat label={<KoRateLabel />} value={formatCtpRate(player.koRate)} accent="text-pink-300" />
+              <MiniStat label={<KooeLabel />} value={formatKooe(player.kooe)} accent={getKooeAccent(player.kooe)} />
             </div>
           </details>
           )
@@ -2599,7 +2635,7 @@ function PlayerProfileDetail({ player, shareTargetRef }) {
 
               <h3 className="text-3xl sm:text-5xl font-black break-words">{player.name}</h3>
               <p className="text-slate-400 mt-3 text-sm sm:text-base">
-                {player.consistency} season profile with {player.ctps} CTPs, a {formatCtpRate(player.ctpRate)} CTP Rate, {formatCtpoe(player.ctpoe)} CTPOE, {player.defensivePins} Defensive Pins, and {player.kos} KOs.
+                {player.consistency} season profile with {player.ctps} CTPs, a {formatCtpRate(player.ctpRate)} CTP Rate, {formatCtpoe(player.ctpoe)} CTPOE, {player.defensivePins} Defensive Pins, {player.kos} KOs, and {formatKooe(player.kooe)} KOOE.
               </p>
               <p className="mt-4 max-w-3xl text-sm sm:text-base leading-7 text-slate-300">
                 {profileBlurb}
@@ -2633,6 +2669,9 @@ function PlayerProfileDetail({ player, shareTargetRef }) {
             <MiniStat label="CTPs" value={player.ctps} accent="text-emerald-400" />
             <MiniStat label={<CtpRateLabel />} value={formatCtpRate(player.ctpRate)} accent="text-emerald-400" />
             <MiniStat label={<CtpoeLabel />} value={formatCtpoe(player.ctpoe)} accent={getCtpoeAccent(player.ctpoe)} />
+            <MiniStat label="KOs" value={player.kos} accent="text-pink-300" />
+            <MiniStat label={<KoRateLabel />} value={formatCtpRate(player.koRate)} accent="text-pink-300" />
+            <MiniStat label={<KooeLabel />} value={formatKooe(player.kooe)} accent={getKooeAccent(player.kooe)} />
           </div>
         </div>
       </div>
@@ -2715,6 +2754,8 @@ function PlayerHeadToHead({
     { label: "CTPOE", tooltip: CTPOE_TOOLTIP, a: selectedPlayer?.ctpoe, b: comparisonPlayer?.ctpoe, format: formatCtpoe },
     { label: "Defensive Pins", a: selectedPlayer?.defensivePins, b: comparisonPlayer?.defensivePins, format: (value) => value || 0 },
     { label: "KOs", a: selectedPlayer?.kos, b: comparisonPlayer?.kos, format: (value) => value || 0 },
+    { label: "KO Rate", tooltip: KO_RATE_TOOLTIP, a: selectedPlayer?.koRate, b: comparisonPlayer?.koRate, format: formatCtpRate },
+    { label: "KOOE", tooltip: KOOE_TOOLTIP, a: selectedPlayer?.kooe, b: comparisonPlayer?.kooe, format: formatKooe },
     { label: "Daily Avg", a: selectedPlayer?.daily?.avgDistance, b: comparisonPlayer?.daily?.avgDistance, format: formatDistance, lowerWins: true },
     { label: "Country Hit", a: selectedPlayer?.daily?.countryHitRate, b: comparisonPlayer?.daily?.countryHitRate, format: formatPercent },
     { label: "Region Hit", a: selectedPlayer?.daily?.regionHitRate, b: comparisonPlayer?.daily?.regionHitRate, format: formatPercent },
@@ -3022,9 +3063,22 @@ function KoLeaderboard({ playerStats = [] }) {
 
   return (
     <div className="space-y-3">
+      <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_4.5rem_5.75rem_5.75rem] items-center gap-4 px-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+        <span>Player</span>
+        <span className="text-right">KOs</span>
+        <span className="flex items-center justify-end gap-1.5">
+          KO Rate
+          <InfoTooltip label="KO Rate" text={KO_RATE_TOOLTIP} align="right" />
+        </span>
+        <span className="flex items-center justify-end gap-1.5">
+          KOOE
+          <InfoTooltip label="KOOE" text={KOOE_TOOLTIP} align="right" />
+        </span>
+      </div>
+
       {koPlayers.slice(0, 6).map((player, index) => (
-        <div key={player.name} className="flex items-center justify-between gap-3 bg-white/5 rounded-2xl p-4 border border-white/10">
-          <div className="flex items-center gap-3 min-w-0">
+        <div key={player.name} className="grid grid-cols-[minmax(0,1fr)_3.5rem_4rem_4rem] sm:grid-cols-[minmax(0,1fr)_4.5rem_5.75rem_5.75rem] items-center gap-3 sm:gap-4 bg-white/5 rounded-2xl p-4 border border-white/10">
+          <div className="flex min-w-0 items-center gap-3">
             <PlayerAvatar playerName={player.name} className="h-12 w-12" />
 
             <div className="min-w-0">
@@ -3033,9 +3087,25 @@ function KoLeaderboard({ playerStats = [] }) {
             </div>
           </div>
 
-          <div className="text-right shrink-0">
-            <p className="text-pink-300 font-black">{player.kos}</p>
-            <p className="text-slate-500 text-xs">KOs</p>
+          <div className="text-right">
+            <p className="text-pink-300 text-xl font-black">{player.kos}</p>
+            <p className="sm:hidden text-slate-500 text-xs">KOs</p>
+          </div>
+
+          <div className="text-right">
+            <p className="text-pink-300 text-xl font-black">{formatCtpRate(player.koRate)}</p>
+            <div className="mt-1 flex items-center justify-end gap-1.5 text-slate-500 text-xs sm:hidden">
+              <span>Rate</span>
+              <InfoTooltip label="KO Rate" text={KO_RATE_TOOLTIP} align="right" />
+            </div>
+          </div>
+
+          <div className="text-right">
+            <p className={`text-xl font-black ${getKooeAccent(player.kooe)}`}>{formatKooe(player.kooe)}</p>
+            <div className="mt-1 flex items-center justify-end gap-1.5 text-slate-500 text-xs sm:hidden">
+              <span>OE</span>
+              <InfoTooltip label="KOOE" text={KOOE_TOOLTIP} align="right" />
+            </div>
           </div>
         </div>
       ))}
