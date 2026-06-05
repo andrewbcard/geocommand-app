@@ -106,6 +106,20 @@ function formatCtpRate(value) {
   return `${Math.round(value * 100)}%`
 }
 
+function formatCtpoe(value) {
+  if (!Number.isFinite(value)) return "N/A"
+
+  return `${value >= 0 ? "+" : ""}${value.toFixed(1)}`
+}
+
+function getCtpoeAccent(value) {
+  if (!Number.isFinite(value)) return "text-slate-400"
+  if (value > 0) return "text-emerald-400"
+  if (value < 0) return "text-pink-300"
+
+  return "text-cyan-400"
+}
+
 function parseLineupPlayers(value) {
   return String(value || "")
     .split(/[\n,;|/]+/)
@@ -683,6 +697,7 @@ const playerStats = useMemo(() => {
         team,
         ctps: 0,
         opportunityCtps: 0,
+        expectedCtps: 0,
         totalDistance: 0,
         kos: 0,
         defensivePins: 0,
@@ -713,6 +728,7 @@ const playerStats = useMemo(() => {
       },
     ]
     const lineupPlayersThisRound = new Set(lineupGroups.flatMap((lineup) => lineup.players))
+    const totalLineupPlayers = lineupPlayersThisRound.size
 
     lineupGroups.forEach((lineup) => {
       lineup.players.forEach((lineupPlayer) => {
@@ -722,8 +738,12 @@ const playerStats = useMemo(() => {
 
         const lineupRecord = ensurePlayer(lineupPlayer, currentTeam)
 
-        if (roundKey) {
+        if (roundKey && !lineupRecord.roundsPlayed.has(roundKey)) {
           lineupRecord.roundsPlayed.add(roundKey)
+
+          if (totalLineupPlayers > 0) {
+            lineupRecord.expectedCtps += 1 / totalLineupPlayers
+          }
         }
       })
     })
@@ -836,6 +856,7 @@ const playerStats = useMemo(() => {
         ...p,
         roundsPlayed: p.roundsPlayed.size,
         ctpRate: p.roundsPlayed.size > 0 ? p.opportunityCtps / p.roundsPlayed.size : null,
+        ctpoe: p.expectedCtps > 0 ? p.opportunityCtps - p.expectedCtps : null,
         avgDistance: p.ctps > 0 ? p.totalDistance / p.ctps : 0,
         avgDefensiveDistance:
           p.defensivePins > 0 ? p.totalDefensiveDistance / p.defensivePins : 0,
@@ -2271,6 +2292,7 @@ function ArchetypeBadge({ archetype, className = "" }) {
 }
 
 const CTP_RATE_TOOLTIP = "CTP Rate = CTPs in lineup-backed rounds divided by rounds played. Rounds played come from the BONT Lineup and LAT Lineup columns."
+const CTPOE_TOOLTIP = "CTPOE = CTPs over expected. Expected CTPs are based on lineup size for each round played. In a 5-player round, each player is expected to record 0.20 CTPs."
 
 function InfoTooltip({ label = "Info", text, align = "left" }) {
   const positionClass = align === "right" ? "right-0" : "left-0"
@@ -2297,6 +2319,15 @@ function CtpRateLabel() {
     <span className="inline-flex items-center gap-1.5">
       <span>CTP Rate</span>
       <InfoTooltip label="CTP Rate" text={CTP_RATE_TOOLTIP} />
+    </span>
+  )
+}
+
+function CtpoeLabel({ align = "left" }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span>CTPOE</span>
+      <InfoTooltip label="CTPOE" text={CTPOE_TOOLTIP} align={align} />
     </span>
   )
 }
@@ -2407,7 +2438,7 @@ function PlayersTab({ playerStats = [], dailyData = [], selectedSeasonLabel }) {
                   <div className="min-w-0">
                     <h3 className="text-xl sm:text-2xl font-black truncate">{player.name}</h3>
                     <p className="text-slate-400 text-sm">
-                      {player.ctps} CTPs • {formatCtpRate(player.ctpRate)} CTP Rate
+                      {player.ctps} CTPs • {formatCtpRate(player.ctpRate)} Rate • {formatCtpoe(player.ctpoe)} CTPOE
                     </p>
                   </div>
                 </div>
@@ -2427,6 +2458,7 @@ function PlayersTab({ playerStats = [], dailyData = [], selectedSeasonLabel }) {
               <MiniStat label="Archetype" value={player.archetype.label} accent={player.archetype.accent} />
               <MiniStat label="CTPs" value={player.ctps} accent="text-cyan-400" />
               <MiniStat label={<CtpRateLabel />} value={formatCtpRate(player.ctpRate)} accent="text-emerald-400" />
+              <MiniStat label={<CtpoeLabel />} value={formatCtpoe(player.ctpoe)} accent={getCtpoeAccent(player.ctpoe)} />
               <MiniStat label="Defensive Pins" value={player.defensivePins} accent="text-cyan-400" />
               <MiniStat label="Avg Distance" value={formatDistance(player.avgDistance)} />
               <MiniStat label="Best Region" value={player.bestRegion} accent="text-purple-400" />
@@ -2567,7 +2599,7 @@ function PlayerProfileDetail({ player, shareTargetRef }) {
 
               <h3 className="text-3xl sm:text-5xl font-black break-words">{player.name}</h3>
               <p className="text-slate-400 mt-3 text-sm sm:text-base">
-                {player.consistency} season profile with {player.ctps} CTPs, a {formatCtpRate(player.ctpRate)} CTP Rate, {player.defensivePins} Defensive Pins, and {player.kos} KOs.
+                {player.consistency} season profile with {player.ctps} CTPs, a {formatCtpRate(player.ctpRate)} CTP Rate, {formatCtpoe(player.ctpoe)} CTPOE, {player.defensivePins} Defensive Pins, and {player.kos} KOs.
               </p>
               <p className="mt-4 max-w-3xl text-sm sm:text-base leading-7 text-slate-300">
                 {profileBlurb}
@@ -2600,6 +2632,7 @@ function PlayerProfileDetail({ player, shareTargetRef }) {
             <MiniStat label="Season Avg" value={formatDistance(player.avgDistance)} accent="text-cyan-400" />
             <MiniStat label="CTPs" value={player.ctps} accent="text-emerald-400" />
             <MiniStat label={<CtpRateLabel />} value={formatCtpRate(player.ctpRate)} accent="text-emerald-400" />
+            <MiniStat label={<CtpoeLabel />} value={formatCtpoe(player.ctpoe)} accent={getCtpoeAccent(player.ctpoe)} />
           </div>
         </div>
       </div>
@@ -2679,6 +2712,7 @@ function PlayerHeadToHead({
     { label: "Season Avg", a: selectedPlayer?.avgDistance, b: comparisonPlayer?.avgDistance, format: formatDistance, lowerWins: true },
     { label: "CTPs", a: selectedPlayer?.ctps, b: comparisonPlayer?.ctps, format: (value) => value || 0 },
     { label: "CTP Rate", tooltip: CTP_RATE_TOOLTIP, a: selectedPlayer?.ctpRate, b: comparisonPlayer?.ctpRate, format: formatCtpRate },
+    { label: "CTPOE", tooltip: CTPOE_TOOLTIP, a: selectedPlayer?.ctpoe, b: comparisonPlayer?.ctpoe, format: formatCtpoe },
     { label: "Defensive Pins", a: selectedPlayer?.defensivePins, b: comparisonPlayer?.defensivePins, format: (value) => value || 0 },
     { label: "KOs", a: selectedPlayer?.kos, b: comparisonPlayer?.kos, format: (value) => value || 0 },
     { label: "Daily Avg", a: selectedPlayer?.daily?.avgDistance, b: comparisonPlayer?.daily?.avgDistance, format: formatDistance, lowerWins: true },
@@ -2902,17 +2936,21 @@ function StandingsTable({ teamStats = [] }) {
 function PlayerList({ playerStats = [] }) {
   return (
     <div className="space-y-3">
-      <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_5rem_6.5rem] items-center gap-4 px-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+      <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_4.5rem_5.75rem_5.75rem] items-center gap-4 px-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
         <span>Player</span>
         <span className="text-right">CTPs</span>
         <span className="flex items-center justify-end gap-1.5">
           CTP Rate
           <InfoTooltip label="CTP Rate" text={CTP_RATE_TOOLTIP} align="right" />
         </span>
+        <span className="flex items-center justify-end gap-1.5">
+          CTPOE
+          <InfoTooltip label="CTPOE" text={CTPOE_TOOLTIP} align="right" />
+        </span>
       </div>
 
       {playerStats.slice(0, 5).map((player) => (
-        <div key={player.name} className="grid grid-cols-[minmax(0,1fr)_4rem_5rem] sm:grid-cols-[minmax(0,1fr)_5rem_6.5rem] items-center gap-3 sm:gap-4 bg-white/5 rounded-2xl p-4 border border-white/10">
+        <div key={player.name} className="grid grid-cols-[minmax(0,1fr)_3.5rem_4rem_4rem] sm:grid-cols-[minmax(0,1fr)_4.5rem_5.75rem_5.75rem] items-center gap-3 sm:gap-4 bg-white/5 rounded-2xl p-4 border border-white/10">
           <div className="flex min-w-0 items-center gap-3">
             <PlayerAvatar playerName={player.name} className="h-12 w-12" />
 
@@ -2932,6 +2970,14 @@ function PlayerList({ playerStats = [] }) {
             <div className="mt-1 flex items-center justify-end gap-1.5 text-slate-500 text-xs sm:hidden">
               <span>Rate</span>
               <InfoTooltip label="CTP Rate" text={CTP_RATE_TOOLTIP} align="right" />
+            </div>
+          </div>
+
+          <div className="text-right">
+            <p className={`text-xl font-black ${getCtpoeAccent(player.ctpoe)}`}>{formatCtpoe(player.ctpoe)}</p>
+            <div className="mt-1 flex items-center justify-end gap-1.5 text-slate-500 text-xs sm:hidden">
+              <span>OE</span>
+              <InfoTooltip label="CTPOE" text={CTPOE_TOOLTIP} align="right" />
             </div>
           </div>
         </div>
