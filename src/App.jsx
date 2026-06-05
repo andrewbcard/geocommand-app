@@ -2272,7 +2272,9 @@ function ArchetypeBadge({ archetype, className = "" }) {
 
 const CTP_RATE_TOOLTIP = "CTP Rate = CTPs in lineup-backed rounds divided by rounds played. Rounds played come from the BONT Lineup and LAT Lineup columns."
 
-function InfoTooltip({ label = "Info", text }) {
+function InfoTooltip({ label = "Info", text, align = "left" }) {
+  const positionClass = align === "right" ? "right-0" : "left-0"
+
   return (
     <span
       className="info-tooltip group relative inline-flex items-center"
@@ -2283,7 +2285,7 @@ function InfoTooltip({ label = "Info", text }) {
         i
       </span>
 
-      <span className="pointer-events-none absolute left-0 top-full z-30 mt-2 w-64 rounded-2xl border border-white/10 bg-[#050812]/95 p-3 text-xs font-bold normal-case tracking-normal text-slate-200 opacity-0 shadow-2xl backdrop-blur-xl transition-opacity group-hover:opacity-100 group-focus:opacity-100 group-active:opacity-100">
+      <span className={`pointer-events-none absolute ${positionClass} top-full z-30 mt-2 w-64 rounded-2xl border border-white/10 bg-[#050812]/95 p-3 text-xs font-bold normal-case tracking-normal text-slate-200 opacity-0 shadow-2xl backdrop-blur-xl transition-opacity group-hover:opacity-100 group-focus:opacity-100 group-active:opacity-100`}>
         {text}
       </span>
     </span>
@@ -2900,9 +2902,18 @@ function StandingsTable({ teamStats = [] }) {
 function PlayerList({ playerStats = [] }) {
   return (
     <div className="space-y-3">
+      <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_5rem_6.5rem] items-center gap-4 px-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+        <span>Player</span>
+        <span className="text-right">CTPs</span>
+        <span className="flex items-center justify-end gap-1.5">
+          CTP Rate
+          <InfoTooltip label="CTP Rate" text={CTP_RATE_TOOLTIP} align="right" />
+        </span>
+      </div>
+
       {playerStats.slice(0, 5).map((player) => (
-        <div key={player.name} className="flex items-center justify-between gap-3 bg-white/5 rounded-2xl p-4 border border-white/10">
-          <div className="flex items-center gap-3">
+        <div key={player.name} className="grid grid-cols-[minmax(0,1fr)_4rem_5rem] sm:grid-cols-[minmax(0,1fr)_5rem_6.5rem] items-center gap-3 sm:gap-4 bg-white/5 rounded-2xl p-4 border border-white/10">
+          <div className="flex min-w-0 items-center gap-3">
             <PlayerAvatar playerName={player.name} className="h-12 w-12" />
 
             <div className="min-w-0">
@@ -2912,12 +2923,15 @@ function PlayerList({ playerStats = [] }) {
           </div>
 
           <div className="text-right">
-            <p className="text-cyan-400 font-bold">{player.ctps}</p>
-            <div className="mt-1 flex items-center justify-end gap-1.5 text-slate-500 text-xs">
-              <span>CTPs</span>
-              <span>•</span>
-              <span>{formatCtpRate(player.ctpRate)}</span>
-              <InfoTooltip label="CTP Rate" text={CTP_RATE_TOOLTIP} />
+            <p className="text-cyan-400 text-xl font-black">{player.ctps}</p>
+            <p className="sm:hidden text-slate-500 text-xs">CTPs</p>
+          </div>
+
+          <div className="text-right">
+            <p className="text-cyan-400 text-xl font-black">{formatCtpRate(player.ctpRate)}</p>
+            <div className="mt-1 flex items-center justify-end gap-1.5 text-slate-500 text-xs sm:hidden">
+              <span>Rate</span>
+              <InfoTooltip label="CTP Rate" text={CTP_RATE_TOOLTIP} align="right" />
             </div>
           </div>
         </div>
