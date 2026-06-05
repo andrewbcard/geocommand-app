@@ -100,6 +100,13 @@ function getNumericSheetValue(row, labels) {
   return parseNumber(getSheetValue(row, labels))
 }
 
+function isDefensivePin(row) {
+  const defensivePlayer = normalizePlayerName(row["2nd CTP"])
+  const differential = getNumericSheetValue(row, ["CTP Differential", "CTP Differential (km)"])
+
+  return Boolean(defensivePlayer) && differential <= 750
+}
+
 function formatCtpRate(value) {
   if (!Number.isFinite(value)) return "N/A"
 
@@ -819,8 +826,9 @@ const playerStats = useMemo(() => {
       normalizeTeamName(getSheetValue(row, ["2nd CTP Team", "Second CTP Team", "Defensive Team"])) ||
       getPlayerTeamForRow(defensivePlayer, row)
     const defensiveDistance = getNumericSheetValue(row, ["2nd CTP Distance (km)", "2nd CTP Distance"]);
+    const defensivePin = isDefensivePin(row)
 
-    if (defensivePlayer && (selectedTeam === "All" || defensiveTeam === selectedTeam)) {
+    if (defensivePin && (selectedTeam === "All" || defensiveTeam === selectedTeam)) {
       const defender = ensurePlayer(defensivePlayer, defensiveTeam)
 
       defender.defensivePins += 1
@@ -958,6 +966,7 @@ const teamStats = useMemo(() => {
       normalizeTeamName(getSheetValue(row, ["2nd CTP Team", "Second CTP Team", "Defensive Team"])) ||
       getPlayerTeamForRow(defensivePlayer, row);
     const defensiveDistance = getNumericSheetValue(row, ["2nd CTP Distance (km)", "2nd CTP Distance"]);
+    const defensivePin = isDefensivePin(row)
 
     if (team && (selectedTeam === "All" || team === selectedTeam) && !map[team]) {
       map[team] = {
@@ -979,7 +988,7 @@ const teamStats = useMemo(() => {
       }
     }
 
-    if (defensiveTeam && (selectedTeam === "All" || defensiveTeam === selectedTeam)) {
+    if (defensivePin && defensiveTeam && (selectedTeam === "All" || defensiveTeam === selectedTeam)) {
       if (!map[defensiveTeam]) {
         map[defensiveTeam] = {
           name: defensiveTeam,
@@ -1015,6 +1024,7 @@ const regionStats = useMemo(() => {
     const distance = getNumericSheetValue(row, ["CTP Distance (km)", "CTP Distance"]);
     const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
     const defensiveDistance = getNumericSheetValue(row, ["2nd CTP Distance (km)", "2nd CTP Distance"]);
+    const defensivePin = isDefensivePin(row)
 
     if (!region || !player) return;
 
@@ -1033,7 +1043,7 @@ const regionStats = useMemo(() => {
     map[region].appearances += 1;
     map[region].totalDistance += distance;
 
-    if (defensivePlayer) {
+    if (defensivePin) {
       map[region].defensivePins += 1
       map[region].totalDefensiveDistance += defensiveDistance
 
@@ -1109,6 +1119,7 @@ const countryStats = useMemo(() => {
     const distance = getNumericSheetValue(row, ["CTP Distance (km)", "CTP Distance"]);
     const defensivePlayer = normalizePlayerName(row["2nd CTP"]);
     const defensiveDistance = getNumericSheetValue(row, ["2nd CTP Distance (km)", "2nd CTP Distance"]);
+    const defensivePin = isDefensivePin(row)
 
     if (!country || !player) return;
 
@@ -1128,7 +1139,7 @@ const countryStats = useMemo(() => {
     map[country].appearances += 1;
     map[country].totalDistance += distance;
 
-    if (defensivePlayer) {
+    if (defensivePin) {
       map[country].defensivePins += 1
       map[country].totalDefensiveDistance += defensiveDistance
 
@@ -1217,7 +1228,7 @@ const liveRegions = useMemo(() => {
 const leagueStats = useMemo(() => {
   const playerCount = playerStats.length
   const totalGuesses = filteredRawData.filter((row) => row["CTP Player"]).length
-  const defensivePins = filteredRawData.filter((row) => row["2nd CTP"]).length
+  const defensivePins = filteredRawData.filter(isDefensivePin).length
   const totalDistance = filteredRawData.reduce(
     (sum, row) => sum + getNumericSheetValue(row, ["CTP Distance (km)", "CTP Distance"]),
     0
