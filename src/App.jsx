@@ -129,8 +129,10 @@ function getOverExpectedAccent(value) {
 
 const formatCtpoe = formatOverExpected
 const formatKooe = formatOverExpected
+const formatDpoe = formatOverExpected
 const getCtpoeAccent = getOverExpectedAccent
 const getKooeAccent = getOverExpectedAccent
+const getDpoeAccent = getOverExpectedAccent
 
 function parseLineupPlayers(value) {
   return String(value || "")
@@ -725,8 +727,10 @@ const playerStats = useMemo(() => {
         opportunityKos: 0,
         expectedKos: 0,
         defensivePins: 0,
+        expectedDefensivePins: 0,
         totalDefensiveDistance: 0,
         roundsPlayed: new Set(),
+        defensiveOpportunities: new Set(),
         regions: {},
         recentRows: [],
       };
@@ -796,6 +800,7 @@ const playerStats = useMemo(() => {
     ]
     const lineupPlayersThisRound = new Set(lineupGroups.flatMap((lineup) => lineup.players))
     const totalLineupPlayers = lineupPlayersThisRound.size
+    const ctpTeamForOpportunity = normalizeTeamName(row["CTP Team"])
 
     lineupGroups.forEach((lineup) => {
       lineup.players.forEach((lineupPlayer) => {
@@ -814,6 +819,29 @@ const playerStats = useMemo(() => {
         }
       })
     })
+
+    const defensiveOpportunityLineup = lineupGroups.find((lineup) =>
+      ctpTeamForOpportunity &&
+      lineup.team !== ctpTeamForOpportunity &&
+      ["Lats", "Bontswana"].includes(ctpTeamForOpportunity)
+    )
+
+    if (roundKey && defensiveOpportunityLineup?.players.length > 0) {
+      const expectedDefensiveShare = 1 / defensiveOpportunityLineup.players.length
+
+      defensiveOpportunityLineup.players.forEach((lineupPlayer) => {
+        const currentTeam = currentPlayerTeams[lineupPlayer] || defensiveOpportunityLineup.team
+
+        if (selectedTeam !== "All" && currentTeam !== selectedTeam && defensiveOpportunityLineup.team !== selectedTeam) return
+
+        const defensiveOpportunityRecord = ensurePlayer(lineupPlayer, currentTeam)
+
+        if (!defensiveOpportunityRecord.defensiveOpportunities.has(roundKey)) {
+          defensiveOpportunityRecord.defensiveOpportunities.add(roundKey)
+          defensiveOpportunityRecord.expectedDefensivePins += expectedDefensiveShare
+        }
+      })
+    }
 
     const player = normalizePlayerName(row["CTP Player"]);
     const team = currentPlayerTeams[player] || getPlayerTeamForRow(player, row) || normalizeTeamName(row["CTP Team"]);
@@ -931,6 +959,9 @@ const playerStats = useMemo(() => {
         ctpoe: p.expectedCtps > 0 ? p.opportunityCtps - p.expectedCtps : null,
         koRate: p.roundsPlayed.size > 0 ? p.opportunityKos / p.roundsPlayed.size : null,
         kooe: p.expectedKos > 0 ? p.opportunityKos - p.expectedKos : null,
+        defensiveOpportunities: p.defensiveOpportunities.size,
+        defensivePinRate: p.defensiveOpportunities.size > 0 ? p.defensivePins / p.defensiveOpportunities.size : null,
+        dpoe: p.expectedDefensivePins > 0 ? p.defensivePins - p.expectedDefensivePins : null,
         avgDistance: p.ctps > 0 ? p.totalDistance / p.ctps : 0,
         avgDefensiveDistance:
           p.defensivePins > 0 ? p.totalDefensiveDistance / p.defensivePins : 0,
@@ -2372,6 +2403,8 @@ const CTP_RATE_TOOLTIP = "CTP Rate = CTPs in lineup-backed rounds divided by rou
 const CTPOE_TOOLTIP = "CTPOE = CTPs over expected. Expected CTPs are based on lineup size for each round played. In a 5-player round, each player is expected to record 0.20 CTPs."
 const KO_RATE_TOOLTIP = "KO Rate = KOs in lineup-backed rounds divided by rounds played. Rounds played come from the BONT Lineup and LAT Lineup columns."
 const KOOE_TOOLTIP = "KOOE = KOs over expected. Expected KOs are based on game lineup size because there can only be one KO per game. In a 5-player game, each player is expected to record 0.20 KOs."
+const DPR_TOOLTIP = "DPR = Defensive Pins divided by defensive opportunities. A defensive opportunity exists when the opposing team records the CTP and the player is in that round's lineup."
+const DPOE_TOOLTIP = "DPOE = Defensive Pins over expected. Expected Defensive Pins are split among the lineup on the team opposite the CTP winner for that round."
 
 function InfoTooltip({ label = "Info", text, align = "left" }) {
   const positionClass = align === "right" ? "right-0" : "left-0"
@@ -2425,6 +2458,24 @@ function KooeLabel({ align = "left" }) {
     <span className="inline-flex items-center gap-1.5">
       <span>KOOE</span>
       <InfoTooltip label="KOOE" text={KOOE_TOOLTIP} align={align} />
+    </span>
+  )
+}
+
+function DprLabel({ align = "left" }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span>DPR</span>
+      <InfoTooltip label="DPR" text={DPR_TOOLTIP} align={align} />
+    </span>
+  )
+}
+
+function DpoeLabel({ align = "left" }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span>DPOE</span>
+      <InfoTooltip label="DPOE" text={DPOE_TOOLTIP} align={align} />
     </span>
   )
 }
@@ -2557,6 +2608,8 @@ function PlayersTab({ playerStats = [], dailyData = [], selectedSeasonLabel }) {
               <MiniStat label={<CtpRateLabel />} value={formatCtpRate(player.ctpRate)} accent="text-emerald-400" />
               <MiniStat label={<CtpoeLabel />} value={formatCtpoe(player.ctpoe)} accent={getCtpoeAccent(player.ctpoe)} />
               <MiniStat label="Defensive Pins" value={player.defensivePins} accent="text-cyan-400" />
+              <MiniStat label={<DprLabel />} value={formatCtpRate(player.defensivePinRate)} accent="text-cyan-300" />
+              <MiniStat label={<DpoeLabel />} value={formatDpoe(player.dpoe)} accent={getDpoeAccent(player.dpoe)} />
               <MiniStat label="Avg Distance" value={formatDistance(player.avgDistance)} />
               <MiniStat label="Best Region" value={player.bestRegion} accent="text-purple-400" />
               <MiniStat label="Daily Hit Rate" value={formatPercent(player.daily?.countryHitRate)} accent="text-emerald-400" />
@@ -2698,7 +2751,7 @@ function PlayerProfileDetail({ player, shareTargetRef }) {
 
               <h3 className="text-3xl sm:text-5xl font-black break-words">{player.name}</h3>
               <p className="text-slate-400 mt-3 text-sm sm:text-base">
-                {player.consistency} season profile with {player.ctps} CTPs, a {formatCtpRate(player.ctpRate)} CTP Rate, {formatCtpoe(player.ctpoe)} CTPOE, {player.defensivePins} Defensive Pins, {player.kos} KOs, and {formatKooe(player.kooe)} KOOE.
+                {player.consistency} season profile with {player.ctps} CTPs, a {formatCtpRate(player.ctpRate)} CTP Rate, {formatCtpoe(player.ctpoe)} CTPOE, {player.defensivePins} Defensive Pins, {formatDpoe(player.dpoe)} DPOE, {player.kos} KOs, and {formatKooe(player.kooe)} KOOE.
               </p>
               <p className="mt-4 max-w-3xl text-sm sm:text-base leading-7 text-slate-300">
                 {profileBlurb}
@@ -2732,6 +2785,9 @@ function PlayerProfileDetail({ player, shareTargetRef }) {
             <MiniStat label="CTPs" value={player.ctps} accent="text-emerald-400" />
             <MiniStat label={<CtpRateLabel />} value={formatCtpRate(player.ctpRate)} accent="text-emerald-400" />
             <MiniStat label={<CtpoeLabel />} value={formatCtpoe(player.ctpoe)} accent={getCtpoeAccent(player.ctpoe)} />
+            <MiniStat label="Defensive Pins" value={player.defensivePins} accent="text-cyan-300" />
+            <MiniStat label={<DprLabel />} value={formatCtpRate(player.defensivePinRate)} accent="text-cyan-300" />
+            <MiniStat label={<DpoeLabel />} value={formatDpoe(player.dpoe)} accent={getDpoeAccent(player.dpoe)} />
             <MiniStat label="KOs" value={player.kos} accent="text-pink-300" />
             <MiniStat label={<KoRateLabel />} value={formatCtpRate(player.koRate)} accent="text-pink-300" />
             <MiniStat label={<KooeLabel />} value={formatKooe(player.kooe)} accent={getKooeAccent(player.kooe)} />
@@ -2816,6 +2872,8 @@ function PlayerHeadToHead({
     { label: "CTP Rate", tooltip: CTP_RATE_TOOLTIP, a: selectedPlayer?.ctpRate, b: comparisonPlayer?.ctpRate, format: formatCtpRate },
     { label: "CTPOE", tooltip: CTPOE_TOOLTIP, a: selectedPlayer?.ctpoe, b: comparisonPlayer?.ctpoe, format: formatCtpoe },
     { label: "Defensive Pins", a: selectedPlayer?.defensivePins, b: comparisonPlayer?.defensivePins, format: (value) => value || 0 },
+    { label: "DPR", tooltip: DPR_TOOLTIP, a: selectedPlayer?.defensivePinRate, b: comparisonPlayer?.defensivePinRate, format: formatCtpRate },
+    { label: "DPOE", tooltip: DPOE_TOOLTIP, a: selectedPlayer?.dpoe, b: comparisonPlayer?.dpoe, format: formatDpoe },
     { label: "KOs", a: selectedPlayer?.kos, b: comparisonPlayer?.kos, format: (value) => value || 0 },
     { label: "KO Rate", tooltip: KO_RATE_TOOLTIP, a: selectedPlayer?.koRate, b: comparisonPlayer?.koRate, format: formatCtpRate },
     { label: "KOOE", tooltip: KOOE_TOOLTIP, a: selectedPlayer?.kooe, b: comparisonPlayer?.kooe, format: formatKooe },
@@ -3097,9 +3155,22 @@ function DefensivePinsList({ playerStats = [] }) {
 
   return (
     <div className="space-y-3">
+      <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_5rem_5.75rem_5.75rem] items-center gap-4 px-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+        <span>Player</span>
+        <span className="text-right">Pins</span>
+        <span className="flex items-center justify-end gap-1.5">
+          DPR
+          <InfoTooltip label="DPR" text={DPR_TOOLTIP} align="right" />
+        </span>
+        <span className="flex items-center justify-end gap-1.5">
+          DPOE
+          <InfoTooltip label="DPOE" text={DPOE_TOOLTIP} align="right" />
+        </span>
+      </div>
+
       {defensivePlayers.slice(0, 6).map((player, index) => (
-        <div key={player.name} className="flex items-center justify-between gap-3 bg-white/5 rounded-2xl p-4 border border-white/10">
-          <div className="flex items-center gap-3 min-w-0">
+        <div key={player.name} className="grid grid-cols-[minmax(0,1fr)_3.5rem_4rem_4rem] sm:grid-cols-[minmax(0,1fr)_5rem_5.75rem_5.75rem] items-center gap-3 sm:gap-4 bg-white/5 rounded-2xl p-4 border border-white/10">
+          <div className="flex min-w-0 items-center gap-3">
             <PlayerAvatar playerName={player.name} className="h-12 w-12" />
 
             <div className="min-w-0">
@@ -3108,10 +3179,25 @@ function DefensivePinsList({ playerStats = [] }) {
             </div>
           </div>
 
-          <div className="text-right shrink-0">
-            <p className="text-cyan-300 font-black">{player.defensivePins}</p>
-            <p className="text-slate-500 text-xs">pins</p>
-            <p className="text-slate-300 text-xs mt-1">{formatDistance(player.avgDefensiveDistance)}</p>
+          <div className="text-right">
+            <p className="text-cyan-300 text-xl font-black">{player.defensivePins}</p>
+            <p className="sm:hidden text-slate-500 text-xs">Pins</p>
+          </div>
+
+          <div className="text-right">
+            <p className="text-cyan-300 text-xl font-black">{formatCtpRate(player.defensivePinRate)}</p>
+            <div className="mt-1 flex items-center justify-end gap-1.5 text-slate-500 text-xs sm:hidden">
+              <span>DPR</span>
+              <InfoTooltip label="DPR" text={DPR_TOOLTIP} align="right" />
+            </div>
+          </div>
+
+          <div className="text-right">
+            <p className={`text-xl font-black ${getDpoeAccent(player.dpoe)}`}>{formatDpoe(player.dpoe)}</p>
+            <div className="mt-1 flex items-center justify-end gap-1.5 text-slate-500 text-xs sm:hidden">
+              <span>OE</span>
+              <InfoTooltip label="DPOE" text={DPOE_TOOLTIP} align="right" />
+            </div>
           </div>
         </div>
       ))}
