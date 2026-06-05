@@ -143,6 +143,16 @@ function getRoundKey(row) {
   return [season, match, game, round].map((value) => String(value).trim().toLowerCase()).join("|")
 }
 
+function getGameKey(row) {
+  const season = normalizeSeasonId(getSheetValue(row, ["Season", "League Season"]))
+  const match = getSheetValue(row, ["Match"])
+  const game = getSheetValue(row, ["Game"])
+
+  if (!season || !match || !game) return ""
+
+  return [season, match, game].map((value) => String(value).trim().toLowerCase()).join("|")
+}
+
 function normalizeSeasonId(value) {
   const normalized = String(value || "").trim().toLowerCase()
 
@@ -722,6 +732,49 @@ const playerStats = useMemo(() => {
     return map[player]
   }
 
+  const gameLineups = new Map()
+
+  filteredRawData.forEach((row) => {
+    const gameKey = getGameKey(row)
+
+    if (!gameKey) return
+
+    const lineupGroups = [
+      {
+        team: "Bontswana",
+        players: parseLineupPlayers(getSheetValue(row, ["BONT Lineup"])),
+      },
+      {
+        team: "Lats",
+        players: parseLineupPlayers(getSheetValue(row, ["LAT Lineup"])),
+      },
+    ]
+
+    if (!gameLineups.has(gameKey)) {
+      gameLineups.set(gameKey, new Map())
+    }
+
+    const gamePlayers = gameLineups.get(gameKey)
+
+    lineupGroups.forEach((lineup) => {
+      lineup.players.forEach((lineupPlayer) => {
+        const currentTeam = currentPlayerTeams[lineupPlayer] || lineup.team
+
+        if (selectedTeam !== "All" && currentTeam !== selectedTeam && lineup.team !== selectedTeam) return
+
+        gamePlayers.set(lineupPlayer, currentTeam)
+      })
+    })
+  })
+
+  gameLineups.forEach((gamePlayers) => {
+    const expectedKoShare = gamePlayers.size > 0 ? 1 / gamePlayers.size : 0
+
+    gamePlayers.forEach((team, player) => {
+      ensurePlayer(player, team).expectedKos += expectedKoShare
+    })
+  })
+
   filteredRawData.forEach((row) => {
     const roundKey = getRoundKey(row)
     const lineupGroups = [
@@ -750,7 +803,6 @@ const playerStats = useMemo(() => {
 
           if (totalLineupPlayers > 0) {
             lineupRecord.expectedCtps += 1 / totalLineupPlayers
-            lineupRecord.expectedKos += 1 / totalLineupPlayers
           }
         }
       })
@@ -2308,7 +2360,7 @@ function ArchetypeBadge({ archetype, className = "" }) {
 const CTP_RATE_TOOLTIP = "CTP Rate = CTPs in lineup-backed rounds divided by rounds played. Rounds played come from the BONT Lineup and LAT Lineup columns."
 const CTPOE_TOOLTIP = "CTPOE = CTPs over expected. Expected CTPs are based on lineup size for each round played. In a 5-player round, each player is expected to record 0.20 CTPs."
 const KO_RATE_TOOLTIP = "KO Rate = KOs in lineup-backed rounds divided by rounds played. Rounds played come from the BONT Lineup and LAT Lineup columns."
-const KOOE_TOOLTIP = "KOOE = KOs over expected. Expected KOs are based on lineup size for each round played. In a 5-player round, each player is expected to record 0.20 KOs."
+const KOOE_TOOLTIP = "KOOE = KOs over expected. Expected KOs are based on game lineup size because there can only be one KO per game. In a 5-player game, each player is expected to record 0.20 KOs."
 
 function InfoTooltip({ label = "Info", text, align = "left" }) {
   const positionClass = align === "right" ? "right-0" : "left-0"
