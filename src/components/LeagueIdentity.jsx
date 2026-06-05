@@ -1,13 +1,16 @@
 const PLAYER_AVATARS = {
-  "Al Harris": "/league/players/al-harris.png",
-  "Andrew Card": "/league/players/andrew-card.png",
-  "Buddy Hammon": "/league/players/buddy-hammon.png",
-  "Caleb Heck": "/league/players/caleb-heck.png",
-  "Chris Rossi": "/league/players/chris-rossi.png",
-  "Clark Marshall": "/league/players/clark-marshall.png",
-  "Jarratt Rouse": "/league/players/jarratt-rouse.png",
-  "Luke Gasque": "/league/players/luke-gasque.png",
-  "Nick Sant": "/league/players/nick-sant.png",
+  "Al Harris": "/league/players/al-harris.jpg",
+  "Andrew Card": "/league/players/andrew-card.jpg",
+  "Buddy Hammon": "/league/players/buddy-hammon.jpg",
+  "Caleb Heck": "/league/players/caleb-heck.jpg",
+  "Chris Rossi": "/league/players/chris-rossi.jpg",
+  "Clark Marshall": "/league/players/clark-marshall.jpg",
+  "Ian Golembeski": "/league/players/ian-golembeski.jpg",
+  "Jarratt Rouse": "/league/players/jarratt-rouse.jpg",
+  "Luke Gasque": "/league/players/luke-gasque.jpg",
+  "Nick Sant": "/league/players/nick-sant.jpg",
+  "Noah Luskus": "/league/players/noah-luskus.jpg",
+  "Vinny Bonta": "/league/players/vinny-bonta.jpg",
 }
 
 const TEAM_LOGOS = {
@@ -58,7 +61,7 @@ export function PlayerAvatar({ playerName, className = "h-16 w-16" }) {
       <img
         src={avatar}
         alt={`${playerName} avatar`}
-        className="h-full w-full object-contain"
+        className="h-full w-full object-cover"
         loading="lazy"
       />
     </div>

@@ -71,9 +71,12 @@ function normalizePlayerName(playerName) {
     "claleb heck": "Caleb Heck",
     "clark marshall": "Clark Marshall",
     "chris rossi": "Chris Rossi",
+    "ian golembeski": "Ian Golembeski",
     "jarratt rouse": "Jarratt Rouse",
     "luke gasque": "Luke Gasque",
     "nick sant": "Nick Sant",
+    "noah luskus": "Noah Luskus",
+    "vinny bonta": "Vinny Bonta",
   }
 
   return canonicalNames[normalized.toLowerCase()] || normalized
