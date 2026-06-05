@@ -100,6 +100,14 @@ function getNumericSheetValue(row, labels) {
   return parseNumber(getSheetValue(row, labels))
 }
 
+function isYes(value) {
+  return String(value || "").trim().toLowerCase() === "yes"
+}
+
+function isYesNo(value) {
+  return ["yes", "no"].includes(String(value || "").trim().toLowerCase())
+}
+
 function isDefensivePin(row) {
   const defensivePlayer = normalizePlayerName(row["2nd CTP"])
   const differential = getNumericSheetValue(row, ["CTP Differential", "CTP Differential (km)"])
@@ -111,6 +119,12 @@ function formatCtpRate(value) {
   if (!Number.isFinite(value)) return "N/A"
 
   return `${Math.round(value * 100)}%`
+}
+
+function formatOptionalPercent(value) {
+  if (!Number.isFinite(value)) return "N/A"
+
+  return formatPercent(value)
 }
 
 function formatOverExpected(value) {
@@ -988,6 +1002,29 @@ const playerStats = useMemo(() => {
 const teamStats = useMemo(() => {
   const map = {};
 
+  function ensureTeam(teamName) {
+    const normalizedTeam = normalizeTeamName(teamName)
+
+    if (!normalizedTeam) return null
+
+    if (!map[normalizedTeam]) {
+      map[normalizedTeam] = {
+        name: normalizedTeam,
+        ctps: 0,
+        totalDistance: 0,
+        kos: 0,
+        defensivePins: 0,
+        totalDefensiveDistance: 0,
+        countryHits: 0,
+        countryHitAttempts: 0,
+        regionHits: 0,
+        regionHitAttempts: 0,
+      }
+    }
+
+    return map[normalizedTeam]
+  }
+
   filteredRawData.forEach((row) => {
     const team = normalizeTeamName(row["CTP Team"]);
     const distance = getNumericSheetValue(row, ["CTP Distance (km)", "CTP Distance"]);
@@ -999,40 +1036,53 @@ const teamStats = useMemo(() => {
     const defensiveDistance = getNumericSheetValue(row, ["2nd CTP Distance (km)", "2nd CTP Distance"]);
     const defensivePin = isDefensivePin(row)
 
-    if (team && (selectedTeam === "All" || team === selectedTeam) && !map[team]) {
-      map[team] = {
-        name: team,
-        ctps: 0,
-        totalDistance: 0,
-        kos: 0,
-        defensivePins: 0,
-        totalDefensiveDistance: 0,
-      };
-    }
+    const teamHitColumns = [
+      {
+        team: "Bontswana",
+        countryHit: getSheetValue(row, ["BONT Country Hit", "Bont Country Hit"]),
+        regionHit: getSheetValue(row, ["BONT Region Hit", "Bont Region Hit"]),
+      },
+      {
+        team: "Lats",
+        countryHit: getSheetValue(row, ["LAT Country Hit", "Lat Country Hit"]),
+        regionHit: getSheetValue(row, ["LAT Region Hit", "Lat Region Hit"]),
+      },
+    ]
+
+    teamHitColumns.forEach((entry) => {
+      if (selectedTeam !== "All" && entry.team !== selectedTeam) return
+
+      const teamRecord = ensureTeam(entry.team)
+
+      if (!teamRecord) return
+
+      if (isYesNo(entry.countryHit)) {
+        teamRecord.countryHitAttempts += 1
+        if (isYes(entry.countryHit)) teamRecord.countryHits += 1
+      }
+
+      if (isYesNo(entry.regionHit)) {
+        teamRecord.regionHitAttempts += 1
+        if (isYes(entry.regionHit)) teamRecord.regionHits += 1
+      }
+    })
 
     if (team && (selectedTeam === "All" || team === selectedTeam)) {
-      map[team].ctps += 1;
-      map[team].totalDistance += distance;
+      const teamRecord = ensureTeam(team)
+
+      teamRecord.ctps += 1;
+      teamRecord.totalDistance += distance;
 
       if (ko && ko !== "-") {
-        map[team].kos += 1;
+        teamRecord.kos += 1;
       }
     }
 
     if (defensivePin && defensiveTeam && (selectedTeam === "All" || defensiveTeam === selectedTeam)) {
-      if (!map[defensiveTeam]) {
-        map[defensiveTeam] = {
-          name: defensiveTeam,
-          ctps: 0,
-          totalDistance: 0,
-          kos: 0,
-          defensivePins: 0,
-          totalDefensiveDistance: 0,
-        }
-      }
+      const defensiveTeamRecord = ensureTeam(defensiveTeam)
 
-      map[defensiveTeam].defensivePins += 1
-      map[defensiveTeam].totalDefensiveDistance += defensiveDistance
+      defensiveTeamRecord.defensivePins += 1
+      defensiveTeamRecord.totalDefensiveDistance += defensiveDistance
     }
   });
 
@@ -1042,6 +1092,10 @@ const teamStats = useMemo(() => {
       avgDistance: team.ctps > 0 ? team.totalDistance / team.ctps : 0,
       avgDefensiveDistance:
         team.defensivePins > 0 ? team.totalDefensiveDistance / team.defensivePins : 0,
+      countryHitRate:
+        team.countryHitAttempts > 0 ? (team.countryHits / team.countryHitAttempts) * 100 : null,
+      regionHitRate:
+        team.regionHitAttempts > 0 ? (team.regionHits / team.regionHitAttempts) * 100 : null,
     }))
     .sort((a, b) => b.ctps - a.ctps);
 }, [filteredRawData, getPlayerTeamForRow, selectedTeam]);
@@ -3044,12 +3098,14 @@ function PanelHeader({ eyebrow, title, right }) {
 function StandingsTable({ teamStats = [] }) {
   return (
     <>
-      <div className="hidden sm:grid grid-cols-5 text-slate-500 text-sm border-b border-white/10 pb-3 px-4">
+      <div className="hidden sm:grid grid-cols-7 text-slate-500 text-sm border-b border-white/10 pb-3 px-4">
         <div>Team</div>
         <div>CTPs</div>
         <div>Defensive Pins</div>
         <div>Avg Distance</div>
         <div>KOs</div>
+        <div>Country Hit</div>
+        <div>Region Hit</div>
       </div>
 
       <div className="space-y-3 mt-4">
@@ -3059,7 +3115,7 @@ function StandingsTable({ teamStats = [] }) {
   return (
     <div
       key={team.name}
-      className={`interactive-card grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border ${brand.border} ${brand.glow}`}
+      className={`interactive-card grid grid-cols-2 sm:grid-cols-7 gap-3 sm:gap-4 items-center bg-white/5 hover:bg-white/10 transition-all rounded-2xl p-4 border ${brand.border} ${brand.glow}`}
     >
       <div className="font-bold col-span-2 sm:col-span-1">
         <span className={`flex items-center gap-3 ${brand.accent}`}>
@@ -3086,6 +3142,16 @@ function StandingsTable({ teamStats = [] }) {
       <div className="text-emerald-400 font-semibold">
         <span className="sm:hidden text-slate-500 text-xs block">KOs</span>
         {team.kos} KOs
+      </div>
+
+      <div className="text-purple-300 font-semibold">
+        <span className="sm:hidden text-slate-500 text-xs block">Country Hit</span>
+        {formatOptionalPercent(team.countryHitRate)}
+      </div>
+
+      <div className="text-pink-300 font-semibold">
+        <span className="sm:hidden text-slate-500 text-xs block">Region Hit</span>
+        {formatOptionalPercent(team.regionHitRate)}
       </div>
     </div>
   )
