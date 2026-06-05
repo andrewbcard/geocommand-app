@@ -103,9 +103,16 @@ details[open] {
   outline-offset: 3px;
 }
 
+.info-tooltip:focus-visible {
+  outline: 2px solid rgba(34, 211, 238, 0.75);
+  outline-offset: 3px;
+}
+
 @media (hover: none) {
   .archetype-badge:focus > span:last-child,
-  .archetype-badge:active > span:last-child {
+  .archetype-badge:active > span:last-child,
+  .info-tooltip:focus > span:last-child,
+  .info-tooltip:active > span:last-child {
     opacity: 1;
   }
 }

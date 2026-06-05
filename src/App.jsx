@@ -100,6 +100,30 @@ function getNumericSheetValue(row, labels) {
   return parseNumber(getSheetValue(row, labels))
 }
 
+function formatCtpRate(value) {
+  if (!Number.isFinite(value)) return "N/A"
+
+  return `${Math.round(value * 100)}%`
+}
+
+function parseLineupPlayers(value) {
+  return String(value || "")
+    .split(/[\n,;|/]+/)
+    .map(normalizePlayerName)
+    .filter(Boolean)
+}
+
+function getRoundKey(row) {
+  const season = normalizeSeasonId(getSheetValue(row, ["Season", "League Season"]))
+  const match = getSheetValue(row, ["Match"])
+  const game = getSheetValue(row, ["Game"])
+  const round = getSheetValue(row, ["Round", "Round Number"])
+
+  if (!season || !match || !game || !round) return ""
+
+  return [season, match, game, round].map((value) => String(value).trim().toLowerCase()).join("|")
+}
+
 function normalizeSeasonId(value) {
   const normalized = String(value || "").trim().toLowerCase()
 
@@ -614,12 +638,22 @@ const filteredRawData = useMemo(() => {
     const defensiveTeam =
       normalizeTeamName(getSheetValue(row, ["2nd CTP Team", "Second CTP Team", "Defensive Team"])) ||
       getPlayerTeamForRow(defensivePlayer, row)
+    const lineupTeamMatches =
+      selectedTeam !== "All" &&
+      [
+        { team: "Bontswana", players: parseLineupPlayers(getSheetValue(row, ["BONT Lineup"])) },
+        { team: "Lats", players: parseLineupPlayers(getSheetValue(row, ["LAT Lineup"])) },
+      ].some((lineup) =>
+        (lineup.team === selectedTeam && lineup.players.length > 0) ||
+        lineup.players.some((lineupPlayer) => currentPlayerTeams[lineupPlayer] === selectedTeam)
+      )
     const teamMatches =
       selectedTeam === "All" ||
       currentTeam === selectedTeam ||
       currentDefensiveTeam === selectedTeam ||
       ctpTeam === selectedTeam ||
-      defensiveTeam === selectedTeam
+      defensiveTeam === selectedTeam ||
+      lineupTeamMatches
 
     const mode = getModeValue(row)
 
@@ -648,10 +682,12 @@ const playerStats = useMemo(() => {
         name: player,
         team,
         ctps: 0,
+        opportunityCtps: 0,
         totalDistance: 0,
         kos: 0,
         defensivePins: 0,
         totalDefensiveDistance: 0,
+        roundsPlayed: new Set(),
         regions: {},
         recentRows: [],
       };
@@ -665,6 +701,33 @@ const playerStats = useMemo(() => {
   }
 
   filteredRawData.forEach((row) => {
+    const roundKey = getRoundKey(row)
+    const lineupGroups = [
+      {
+        team: "Bontswana",
+        players: parseLineupPlayers(getSheetValue(row, ["BONT Lineup"])),
+      },
+      {
+        team: "Lats",
+        players: parseLineupPlayers(getSheetValue(row, ["LAT Lineup"])),
+      },
+    ]
+    const lineupPlayersThisRound = new Set(lineupGroups.flatMap((lineup) => lineup.players))
+
+    lineupGroups.forEach((lineup) => {
+      lineup.players.forEach((lineupPlayer) => {
+        const currentTeam = currentPlayerTeams[lineupPlayer] || lineup.team
+
+        if (selectedTeam !== "All" && currentTeam !== selectedTeam && lineup.team !== selectedTeam) return
+
+        const lineupRecord = ensurePlayer(lineupPlayer, currentTeam)
+
+        if (roundKey) {
+          lineupRecord.roundsPlayed.add(roundKey)
+        }
+      })
+    })
+
     const player = normalizePlayerName(row["CTP Player"]);
     const team = currentPlayerTeams[player] || getPlayerTeamForRow(player, row) || normalizeTeamName(row["CTP Team"]);
     const region = row["Region"];
@@ -690,6 +753,9 @@ const playerStats = useMemo(() => {
     const playerRecord = ensurePlayer(player, team)
 
     playerRecord.ctps += 1;
+    if (roundKey && lineupPlayersThisRound.has(player)) {
+      playerRecord.opportunityCtps += 1
+    }
     playerRecord.totalDistance += distance;
     playerRecord.recentRows.push({
       region,
@@ -715,7 +781,7 @@ const playerStats = useMemo(() => {
   });
 
   return Object.values(map)
-    .filter((p) => p.ctps > 0)
+    .filter((p) => p.ctps > 0 || p.roundsPlayed.size > 0)
     .map((p) => {
       const regionAverages = Object.entries(p.regions)
         .map(([name, data]) => ({
@@ -768,6 +834,8 @@ const playerStats = useMemo(() => {
 
       return {
         ...p,
+        roundsPlayed: p.roundsPlayed.size,
+        ctpRate: p.roundsPlayed.size > 0 ? p.opportunityCtps / p.roundsPlayed.size : null,
         avgDistance: p.ctps > 0 ? p.totalDistance / p.ctps : 0,
         avgDefensiveDistance:
           p.defensivePins > 0 ? p.totalDefensiveDistance / p.defensivePins : 0,
@@ -2202,6 +2270,35 @@ function ArchetypeBadge({ archetype, className = "" }) {
   )
 }
 
+const CTP_RATE_TOOLTIP = "CTP Rate = CTPs in lineup-backed rounds divided by rounds played. Rounds played come from the BONT Lineup and LAT Lineup columns."
+
+function InfoTooltip({ label = "Info", text }) {
+  return (
+    <span
+      className="info-tooltip group relative inline-flex items-center"
+      tabIndex={0}
+      aria-label={`${label}: ${text}`}
+    >
+      <span className="grid h-5 w-5 place-items-center rounded-full border border-white/10 bg-white/10 text-[0.65rem] font-black text-slate-300">
+        i
+      </span>
+
+      <span className="pointer-events-none absolute left-0 top-full z-30 mt-2 w-64 rounded-2xl border border-white/10 bg-[#050812]/95 p-3 text-xs font-bold normal-case tracking-normal text-slate-200 opacity-0 shadow-2xl backdrop-blur-xl transition-opacity group-hover:opacity-100 group-focus:opacity-100 group-active:opacity-100">
+        {text}
+      </span>
+    </span>
+  )
+}
+
+function CtpRateLabel() {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span>CTP Rate</span>
+      <InfoTooltip label="CTP Rate" text={CTP_RATE_TOOLTIP} />
+    </span>
+  )
+}
+
 function PlayersTab({ playerStats = [], dailyData = [], selectedSeasonLabel }) {
   const dailyPlayerStats = useMemo(() => buildDailyPlayerStats(dailyData), [dailyData])
   const playerProfiles = useMemo(() => {
@@ -2242,7 +2339,7 @@ function PlayersTab({ playerStats = [], dailyData = [], selectedSeasonLabel }) {
         <StatCard
           label="Most CTPs"
           value={playerProfiles[0]?.name || "Loading"}
-          sub={`${playerProfiles[0]?.ctps || 0} CTPs • ${playerProfiles[0]?.defensivePins || 0} Defensive Pins`}
+          sub={`${playerProfiles[0]?.ctps || 0} CTPs • ${formatCtpRate(playerProfiles[0]?.ctpRate)} CTP Rate`}
           accent="cyan"
         />
 
@@ -2308,7 +2405,7 @@ function PlayersTab({ playerStats = [], dailyData = [], selectedSeasonLabel }) {
                   <div className="min-w-0">
                     <h3 className="text-xl sm:text-2xl font-black truncate">{player.name}</h3>
                     <p className="text-slate-400 text-sm">
-                      {player.ctps} CTPs • {player.defensivePins} Defensive Pins
+                      {player.ctps} CTPs • {formatCtpRate(player.ctpRate)} CTP Rate
                     </p>
                   </div>
                 </div>
@@ -2327,6 +2424,7 @@ function PlayersTab({ playerStats = [], dailyData = [], selectedSeasonLabel }) {
             <div className="mt-5 space-y-3 sm:space-y-4">
               <MiniStat label="Archetype" value={player.archetype.label} accent={player.archetype.accent} />
               <MiniStat label="CTPs" value={player.ctps} accent="text-cyan-400" />
+              <MiniStat label={<CtpRateLabel />} value={formatCtpRate(player.ctpRate)} accent="text-emerald-400" />
               <MiniStat label="Defensive Pins" value={player.defensivePins} accent="text-cyan-400" />
               <MiniStat label="Avg Distance" value={formatDistance(player.avgDistance)} />
               <MiniStat label="Best Region" value={player.bestRegion} accent="text-purple-400" />
@@ -2467,7 +2565,7 @@ function PlayerProfileDetail({ player, shareTargetRef }) {
 
               <h3 className="text-3xl sm:text-5xl font-black break-words">{player.name}</h3>
               <p className="text-slate-400 mt-3 text-sm sm:text-base">
-                {player.consistency} season profile with {player.ctps} CTPs, {player.defensivePins} Defensive Pins, and {player.kos} KOs.
+                {player.consistency} season profile with {player.ctps} CTPs, a {formatCtpRate(player.ctpRate)} CTP Rate, {player.defensivePins} Defensive Pins, and {player.kos} KOs.
               </p>
               <p className="mt-4 max-w-3xl text-sm sm:text-base leading-7 text-slate-300">
                 {profileBlurb}
@@ -2499,6 +2597,7 @@ function PlayerProfileDetail({ player, shareTargetRef }) {
             <MiniStat label="Archetype" value={player.archetype?.label || "Wildcard"} accent={player.archetype?.accent || "text-slate-300"} />
             <MiniStat label="Season Avg" value={formatDistance(player.avgDistance)} accent="text-cyan-400" />
             <MiniStat label="CTPs" value={player.ctps} accent="text-emerald-400" />
+            <MiniStat label={<CtpRateLabel />} value={formatCtpRate(player.ctpRate)} accent="text-emerald-400" />
           </div>
         </div>
       </div>
@@ -2577,6 +2676,7 @@ function PlayerHeadToHead({
   const metrics = [
     { label: "Season Avg", a: selectedPlayer?.avgDistance, b: comparisonPlayer?.avgDistance, format: formatDistance, lowerWins: true },
     { label: "CTPs", a: selectedPlayer?.ctps, b: comparisonPlayer?.ctps, format: (value) => value || 0 },
+    { label: "CTP Rate", tooltip: CTP_RATE_TOOLTIP, a: selectedPlayer?.ctpRate, b: comparisonPlayer?.ctpRate, format: formatCtpRate },
     { label: "Defensive Pins", a: selectedPlayer?.defensivePins, b: comparisonPlayer?.defensivePins, format: (value) => value || 0 },
     { label: "KOs", a: selectedPlayer?.kos, b: comparisonPlayer?.kos, format: (value) => value || 0 },
     { label: "Daily Avg", a: selectedPlayer?.daily?.avgDistance, b: comparisonPlayer?.daily?.avgDistance, format: formatDistance, lowerWins: true },
@@ -2656,7 +2756,10 @@ function PlayerHeadToHead({
         {metrics.map((metric) => (
           <div key={metric.label} className="bg-white/5 rounded-2xl p-4 border border-white/10">
             <div className="grid grid-cols-[1.15fr_1fr_1fr] gap-3 items-center">
-              <p className="text-slate-500 text-sm font-bold">{metric.label}</p>
+              <p className="flex items-center gap-1.5 text-slate-500 text-sm font-bold">
+                <span>{metric.label}</span>
+                {metric.tooltip && <InfoTooltip label={metric.label} text={metric.tooltip} />}
+              </p>
               <p className={`text-xl font-black ${winnerClass(metric, "a")}`}>
                 {metric.format(metric.a)}
               </p>
@@ -2810,7 +2913,12 @@ function PlayerList({ playerStats = [] }) {
 
           <div className="text-right">
             <p className="text-cyan-400 font-bold">{player.ctps}</p>
-            <p className="text-slate-500 text-xs">CTPs</p>
+            <div className="mt-1 flex items-center justify-end gap-1.5 text-slate-500 text-xs">
+              <span>CTPs</span>
+              <span>•</span>
+              <span>{formatCtpRate(player.ctpRate)}</span>
+              <InfoTooltip label="CTP Rate" text={CTP_RATE_TOOLTIP} />
+            </div>
           </div>
         </div>
       ))}
