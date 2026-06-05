@@ -53,8 +53,10 @@ function normalizeTeamName(teamName) {
   const lower = normalized.toLowerCase()
 
   if (lower.includes("bontswana")) return "Bontswana"
+  if (lower === "bont" || lower === "bonts") return "Bontswana"
   if (lower.includes("latitude longorias")) return "Latitude Longorias"
   if (lower.includes("lats")) return "Lats"
+  if (lower === "lat") return "Lats"
 
   return normalized
 }
@@ -800,6 +802,46 @@ const playerStats = useMemo(() => {
     })
   })
 
+  const defensiveOpportunityRounds = new Map()
+
+  filteredRawData.forEach((row) => {
+    const roundKey = getRoundKey(row)
+    const ctpTeam = normalizeTeamName(row["CTP Team"])
+
+    if (!roundKey || !["Lats", "Bontswana"].includes(ctpTeam) || defensiveOpportunityRounds.has(roundKey)) return
+
+    const lineupGroups = [
+      {
+        team: "Bontswana",
+        players: parseLineupPlayers(getSheetValue(row, ["BONT Lineup"])),
+      },
+      {
+        team: "Lats",
+        players: parseLineupPlayers(getSheetValue(row, ["LAT Lineup"])),
+      },
+    ]
+    const defensiveLineup = lineupGroups.find((lineup) => lineup.team !== ctpTeam)
+
+    if (defensiveLineup?.players.length > 0) {
+      defensiveOpportunityRounds.set(roundKey, defensiveLineup)
+    }
+  })
+
+  defensiveOpportunityRounds.forEach((defensiveLineup, roundKey) => {
+    const expectedDefensiveShare = 1 / defensiveLineup.players.length
+
+    defensiveLineup.players.forEach((lineupPlayer) => {
+      const currentTeam = currentPlayerTeams[lineupPlayer] || defensiveLineup.team
+
+      if (selectedTeam !== "All" && currentTeam !== selectedTeam && defensiveLineup.team !== selectedTeam) return
+
+      const defensiveOpportunityRecord = ensurePlayer(lineupPlayer, currentTeam)
+
+      defensiveOpportunityRecord.defensiveOpportunities.add(roundKey)
+      defensiveOpportunityRecord.expectedDefensivePins += expectedDefensiveShare
+    })
+  })
+
   filteredRawData.forEach((row) => {
     const roundKey = getRoundKey(row)
     const lineupGroups = [
@@ -814,7 +856,6 @@ const playerStats = useMemo(() => {
     ]
     const lineupPlayersThisRound = new Set(lineupGroups.flatMap((lineup) => lineup.players))
     const totalLineupPlayers = lineupPlayersThisRound.size
-    const ctpTeamForOpportunity = normalizeTeamName(row["CTP Team"])
 
     lineupGroups.forEach((lineup) => {
       lineup.players.forEach((lineupPlayer) => {
@@ -833,29 +874,6 @@ const playerStats = useMemo(() => {
         }
       })
     })
-
-    const defensiveOpportunityLineup = lineupGroups.find((lineup) =>
-      ctpTeamForOpportunity &&
-      lineup.team !== ctpTeamForOpportunity &&
-      ["Lats", "Bontswana"].includes(ctpTeamForOpportunity)
-    )
-
-    if (roundKey && defensiveOpportunityLineup?.players.length > 0) {
-      const expectedDefensiveShare = 1 / defensiveOpportunityLineup.players.length
-
-      defensiveOpportunityLineup.players.forEach((lineupPlayer) => {
-        const currentTeam = currentPlayerTeams[lineupPlayer] || defensiveOpportunityLineup.team
-
-        if (selectedTeam !== "All" && currentTeam !== selectedTeam && defensiveOpportunityLineup.team !== selectedTeam) return
-
-        const defensiveOpportunityRecord = ensurePlayer(lineupPlayer, currentTeam)
-
-        if (!defensiveOpportunityRecord.defensiveOpportunities.has(roundKey)) {
-          defensiveOpportunityRecord.defensiveOpportunities.add(roundKey)
-          defensiveOpportunityRecord.expectedDefensivePins += expectedDefensiveShare
-        }
-      })
-    }
 
     const player = normalizePlayerName(row["CTP Player"]);
     const team = currentPlayerTeams[player] || getPlayerTeamForRow(player, row) || normalizeTeamName(row["CTP Team"]);
@@ -2457,8 +2475,8 @@ const CTP_RATE_TOOLTIP = "CTP Rate = CTPs in lineup-backed rounds divided by rou
 const CTPOE_TOOLTIP = "CTPOE = CTPs over expected. Expected CTPs are based on lineup size for each round played. In a 5-player round, each player is expected to record 0.20 CTPs."
 const KO_RATE_TOOLTIP = "KO Rate = KOs in lineup-backed rounds divided by rounds played. Rounds played come from the BONT Lineup and LAT Lineup columns."
 const KOOE_TOOLTIP = "KOOE = KOs over expected. Expected KOs are based on game lineup size because there can only be one KO per game. In a 5-player game, each player is expected to record 0.20 KOs."
-const DPR_TOOLTIP = "DPR = Defensive Pins divided by defensive opportunities. A defensive opportunity exists when the opposing team records the CTP and the player is in that round's lineup."
-const DPOE_TOOLTIP = "DPOE = Defensive Pins over expected. Expected Defensive Pins are split among the lineup on the team opposite the CTP winner for that round."
+const DPR_TOOLTIP = "DPR = Defensive Pins divided by defensive opportunities. One defensive opportunity exists when the opposing team records the CTP and the player is in that unique round's lineup."
+const DPOE_TOOLTIP = "DPOE = Defensive Pins over expected. Expected Defensive Pins are split once per unique round among the lineup on the team opposite the CTP winner."
 
 function InfoTooltip({ label = "Info", text, align = "left" }) {
   const positionClass = align === "right" ? "right-0" : "left-0"
